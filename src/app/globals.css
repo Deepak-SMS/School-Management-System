@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+/*
+  Design tokens for the School Management System SaaS.
+  Original palette — not derived from Fedena or any reference product.
+  Primary: "signal" indigo (brand/interactive). Accent: "sprout" emerald (positive/growth,
+  fitting for an education product). Neutrals: a slightly warm slate scale for a softer,
+  less clinical enterprise feel than pure gray.
+*/
+:root {
+  --background: #f8f9fb;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --foreground: #14151a;
+  --muted-foreground: #62636c;
+  --border: #e4e5ea;
+  --border-strong: #d3d5dc;
+
+  --color-primary-50: #eef1ff;
+  --color-primary-100: #e0e4ff;
+  --color-primary-200: #c5cbff;
+  --color-primary-300: #a2a8ff;
+  --color-primary-400: #8085fa;
+  --color-primary-500: #6363f1;
+  --color-primary-600: #4f46e0;
+  --color-primary-700: #4238bd;
+  --color-primary-800: #362f97;
+  --color-primary-900: #2d2878;
+
+  --color-accent-50: #ecfdf6;
+  --color-accent-100: #d1fae9;
+  --color-accent-500: #10b981;
+  --color-accent-600: #059669;
+  --color-accent-700: #047857;
+
+  --color-warning-50: #fffaeb;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+
+  --color-info-50: #eff8ff;
+  --color-info-500: #3b82f6;
+  --color-info-600: #2563eb;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  --shadow-color: 220 20% 10%;
+  --sidebar-width-expanded: 17rem;
+  --sidebar-width-collapsed: 4.5rem;
+  --topnav-height: 3.75rem;
+}
+
+:root[data-theme="dark"] {
+  --background: #0c0d10;
+  --surface: #131419;
+  --surface-raised: #191a21;
+  --foreground: #f2f2f5;
+  --muted-foreground: #94959e;
+  --border: #24252d;
+  --border-strong: #33343e;
+
+  --color-primary-50: #191a3a;
+  --color-primary-100: #23255a;
+  --color-primary-200: #2f3277;
+  --color-primary-300: #4038a8;
+  --color-primary-400: #6b64e8;
+  --color-primary-500: #8580f5;
+  --color-primary-600: #9a95f8;
+  --color-primary-700: #b3afff;
+  --color-primary-800: #d0cdff;
+  --color-primary-900: #e6e4ff;
+
+  --color-accent-50: #06231b;
+  --color-accent-100: #0b3327;
+  --color-accent-500: #34d399;
+  --color-accent-600: #6ee7b7;
+  --color-accent-700: #a7f3d5;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-primary-50: var(--color-primary-50);
+  --color-primary-100: var(--color-primary-100);
+  --color-primary-200: var(--color-primary-200);
+  --color-primary-300: var(--color-primary-300);
+  --color-primary-400: var(--color-primary-400);
+  --color-primary-500: var(--color-primary-500);
+  --color-primary-600: var(--color-primary-600);
+  --color-primary-700: var(--color-primary-700);
+  --color-primary-800: var(--color-primary-800);
+  --color-primary-900: var(--color-primary-900);
+
+  --color-accent-50: var(--color-accent-50);
+  --color-accent-100: var(--color-accent-100);
+  --color-accent-500: var(--color-accent-500);
+  --color-accent-600: var(--color-accent-600);
+  --color-accent-700: var(--color-accent-700);
+
+  --color-warning-50: var(--color-warning-50);
+  --color-warning-500: var(--color-warning-500);
+  --color-warning-600: var(--color-warning-600);
+
+  --color-danger-50: var(--color-danger-50);
+  --color-danger-500: var(--color-danger-500);
+  --color-danger-600: var(--color-danger-600);
+
+  --color-info-50: var(--color-info-50);
+  --color-info-500: var(--color-info-500);
+  --color-info-600: var(--color-info-600);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--color-primary-200);
+}
+
+/* Scrollbar polish — subtle, not the browser default, but no exotic library */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 999px;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

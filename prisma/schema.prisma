@@ -1,0 +1,530 @@
+// Prisma schema for the School Management System.
+//
+// Local dev uses SQLite (zero setup, file-based). SQLite has no native enum or
+// list types, so "enum-like" fields are plain String columns — the allowed
+// values are enforced by Zod schemas in src/lib/validation/*, not the DB.
+// Moving to Postgres in production is a datasource + driver-adapter swap
+// (see src/lib/db.ts) — no model changes required.
+//
+// Every tenant-scoped model carries a `schoolId` and is always queried
+// through that filter (see src/lib/tenant.ts) so one school can never read
+// another's data.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy & identity
+// ---------------------------------------------------------------------------
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  shortName String
+  city      String?
+  state     String?
+  country   String?
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships          SchoolMembership[]
+  academicYears        AcademicYear[]
+  classes              Class[]
+  sections             Section[]
+  students             Student[]
+  staff                Staff[]
+  idCardTemplates      IDCardTemplate[]
+  idCards              IDCard[]
+  idCardGenerationJobs IDCardGenerationJob[]
+  qrVerifications      QRVerification[]
+  importJobs           ImportJob[]
+  photoMappings        PhotoMapping[]
+  cardReplacements     CardReplacement[]
+  uploadedFiles        UploadedFile[]
+  auditLogs            AuditLog[]
+}
+
+/// Auth-ready user record. No password/session flow is implemented yet —
+/// this exists so every other model can reference "who did this" honestly
+/// instead of a fake string.
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships SchoolMembership[]
+}
+
+/// A user can belong to more than one school (matches the multi-tenant
+/// TenantProvider already in the frontend). `role` mirrors the Role union in
+/// src/types/user.ts.
+model SchoolMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  schoolId  String
+  role      String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, schoolId])
+  @@index([schoolId])
+}
+
+// ---------------------------------------------------------------------------
+// School structure
+// ---------------------------------------------------------------------------
+
+model AcademicYear {
+  id        String   @id @default(cuid())
+  schoolId  String
+  label     String
+  startDate DateTime
+  endDate   DateTime
+  isCurrent Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  students Student[]
+
+  @@unique([schoolId, label])
+  @@index([schoolId])
+}
+
+model Class {
+  id        String   @id @default(cuid())
+  schoolId  String
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  sections Section[]
+  students Student[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+model Section {
+  id        String   @id @default(cuid())
+  schoolId  String
+  classId   String
+  name      String
+  createdAt DateTime @default(now())
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  class    Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  students Student[]
+
+  @@unique([classId, name])
+  @@index([schoolId])
+}
+
+// ---------------------------------------------------------------------------
+// People
+// ---------------------------------------------------------------------------
+
+/// `status`: active | inactive | graduated | transferred | suspended
+model Student {
+  id               String    @id @default(cuid())
+  schoolId         String
+  admissionNumber  String
+  firstName        String
+  middleName       String?
+  lastName         String
+  photoUrl         String?
+  dateOfBirth      DateTime?
+  gender           String?
+  bloodGroup       String?
+  academicYearId   String
+  classId          String
+  sectionId        String?
+  rollNumber       String?
+  house            String?
+  status           String    @default("active")
+  guardianName     String?
+  guardianPhone    String?
+  emergencyContact String?
+  address          String?
+  city             String?
+  state            String?
+  country          String?
+  pinCode          String?
+  busNumber        String?
+  route            String?
+  pickupPoint      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  school          School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYear    AcademicYear           @relation(fields: [academicYearId], references: [id])
+  class           Class                  @relation(fields: [classId], references: [id])
+  section         Section?               @relation(fields: [sectionId], references: [id])
+  idCards         IDCard[]
+  qrVerification  QRVerification?
+  generationItems IDCardGenerationItem[]
+  photoMappings   PhotoMapping[]
+
+  @@unique([schoolId, admissionNumber])
+  @@index([schoolId, classId, sectionId])
+  @@index([schoolId, status])
+}
+
+/// `category`: teacher | principal | admin_staff | accountant | librarian | driver | security | support_staff | other
+/// `employmentStatus`: active | inactive | resigned | terminated
+model Staff {
+  id               String    @id @default(cuid())
+  schoolId         String
+  employeeId       String
+  fullName         String
+  photoUrl         String?
+  dateOfBirth      DateTime?
+  gender           String?
+  bloodGroup       String?
+  designation      String
+  department       String?
+  category         String
+  mobileNumber     String
+  email            String?
+  emergencyContact String?
+  address          String?
+  joiningDate      DateTime?
+  employeeType     String?
+  employmentStatus String    @default("active")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  school          School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  idCards         IDCard[]
+  qrVerification  QRVerification?
+  generationItems IDCardGenerationItem[]
+  photoMappings   PhotoMapping[]
+
+  @@unique([schoolId, employeeId])
+  @@index([schoolId, category])
+  @@index([schoolId, employmentStatus])
+}
+
+// ---------------------------------------------------------------------------
+// ID card templates & designer
+// ---------------------------------------------------------------------------
+
+/// `category`: student | staff | teacher | custom
+/// `orientation`: portrait | landscape
+model IDCardTemplate {
+  id             String   @id @default(cuid())
+  schoolId       String
+  name           String
+  category       String
+  cardWidthMm    Float    @default(85.6)
+  cardHeightMm   Float    @default(53.98)
+  cornerRadiusMm Float    @default(3.18)
+  orientation    String   @default("portrait")
+  isDefault      Boolean  @default(false)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school         School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  elements       DesignElement[]
+  versions       TemplateVersion[]
+  idCards        IDCard[]
+  generationJobs IDCardGenerationJob[]
+
+  @@index([schoolId, category])
+}
+
+/// `side`: front | back
+/// `type`: text | image | photo | logo | shape | line | qrcode | barcode | signature | dynamic_field
+/// `fieldKey` (only for type = dynamic_field), e.g. "student.name", "staff.designation"
+model DesignElement {
+  id              String   @id @default(cuid())
+  templateId      String
+  side            String
+  type            String
+  fieldKey        String?
+  content         String?
+  x               Float
+  y               Float
+  width           Float
+  height          Float
+  rotation        Float    @default(0)
+  fontSize        Float?
+  fontFamily      String?
+  fontWeight      String?
+  textAlign       String?
+  letterSpacing   Float?
+  lineHeight      Float?
+  color           String?
+  backgroundColor String?
+  zIndex          Int      @default(0)
+  isLocked        Boolean  @default(false)
+  isHidden        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  template IDCardTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, side])
+}
+
+/// Snapshot of a template's full element tree, taken whenever it's published,
+/// so a bad edit can be rolled back. `snapshotJson` is a serialized array of
+/// DesignElement-shaped objects (SQLite has no JSON/list column type).
+model TemplateVersion {
+  id            String   @id @default(cuid())
+  templateId    String
+  versionNumber Int
+  snapshotJson  String
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  template IDCardTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, versionNumber])
+}
+
+// ---------------------------------------------------------------------------
+// ID cards & generation
+// ---------------------------------------------------------------------------
+
+/// `status`: draft | generated | active | lost | blocked | expired | replaced
+/// `barcodeType`: code128 | qrcode
+model IDCard {
+  id           String    @id @default(cuid())
+  schoolId     String
+  templateId   String
+  studentId    String?
+  staffId      String?
+  status       String    @default("draft")
+  cardNumber   String?
+  barcodeValue String?
+  barcodeType  String    @default("code128")
+  pdfUrl       String?
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  school            School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  template          IDCardTemplate         @relation(fields: [templateId], references: [id])
+  student           Student?               @relation(fields: [studentId], references: [id])
+  staff             Staff?                 @relation(fields: [staffId], references: [id])
+  qrVerification    QRVerification?
+  replacementsAsOld CardReplacement[]      @relation("OriginalCard")
+  replacementsAsNew CardReplacement[]      @relation("NewCard")
+  generationItems   IDCardGenerationItem[]
+
+  @@index([schoolId, status])
+  @@index([studentId])
+  @@index([staffId])
+}
+
+/// `scope`: single | class | section | staff | teachers | school | custom_selection
+/// `status`: queued | processing | completed | failed
+/// `pdfType`: individual | bulk | a4_sheet
+/// `sides`: front_only | back_only | front_back
+model IDCardGenerationJob {
+  id            String    @id @default(cuid())
+  schoolId      String
+  templateId    String
+  scope         String
+  classId       String?
+  sectionId     String?
+  status        String    @default("queued")
+  totalCount    Int       @default(0)
+  successCount  Int       @default(0)
+  failedCount   Int       @default(0)
+  pdfType       String    @default("individual")
+  sides         String    @default("front_back")
+  outputFileUrl String?
+  requestedBy   String?
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  school   School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  template IDCardTemplate         @relation(fields: [templateId], references: [id])
+  items    IDCardGenerationItem[]
+
+  @@index([schoolId, status])
+}
+
+/// `status`: pending | success | failed | skipped
+model IDCardGenerationItem {
+  id           String   @id @default(cuid())
+  jobId        String
+  studentId    String?
+  staffId      String?
+  idCardId     String?
+  status       String   @default("pending")
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  job     IDCardGenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  student Student?            @relation(fields: [studentId], references: [id])
+  staff   Staff?              @relation(fields: [staffId], references: [id])
+  idCard  IDCard?             @relation(fields: [idCardId], references: [id])
+
+  @@index([jobId])
+}
+
+/// The public, scannable identity behind a card. `code` is an opaque token —
+/// never the admission/employee number — so a leaked QR image can't be used
+/// to guess or enumerate other people's records.
+/// `visibleFieldsJson`: JSON array of field keys the school allows on the
+/// public verification page, e.g. ["name","admissionNumber","class","status"].
+model QRVerification {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  schoolId          String
+  studentId         String?  @unique
+  staffId           String?  @unique
+  idCardId          String?  @unique
+  isActive          Boolean  @default(true)
+  visibleFieldsJson String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  school  School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student Student? @relation(fields: [studentId], references: [id])
+  staff   Staff?   @relation(fields: [staffId], references: [id])
+  idCard  IDCard?  @relation(fields: [idCardId], references: [id])
+
+  @@index([schoolId])
+}
+
+/// `reason`: lost | damaged | blocked | other
+/// `status`: pending | approved | completed
+model CardReplacement {
+  id             String    @id @default(cuid())
+  schoolId       String
+  originalCardId String
+  newCardId      String?
+  reason         String
+  requestedBy    String?
+  status         String    @default("pending")
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+
+  school       School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  originalCard IDCard  @relation("OriginalCard", fields: [originalCardId], references: [id])
+  newCard      IDCard? @relation("NewCard", fields: [newCardId], references: [id])
+
+  @@index([schoolId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Bulk import
+// ---------------------------------------------------------------------------
+
+/// `type`: students | staff | photos
+/// `status`: processing | completed | failed
+/// `columnMappingJson`: JSON map of { sourceColumn: targetField }
+model ImportJob {
+  id                String    @id @default(cuid())
+  schoolId          String
+  type              String
+  fileName          String
+  fileUrl           String?
+  status            String    @default("processing")
+  totalRows         Int       @default(0)
+  validRows         Int       @default(0)
+  errorRows         Int       @default(0)
+  columnMappingJson String?
+  createdBy         String?
+  createdAt         DateTime  @default(now())
+  completedAt       DateTime?
+
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  errors        ImportError[]
+  photoMappings PhotoMapping[]
+
+  @@index([schoolId, type])
+}
+
+model ImportError {
+  id          String  @id @default(cuid())
+  importJobId String
+  rowNumber   Int
+  columnName  String?
+  message     String
+  rawValue    String?
+
+  importJob ImportJob @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+
+  @@index([importJobId])
+}
+
+/// `status`: matched | unmatched | manually_resolved
+model PhotoMapping {
+  id            String   @id @default(cuid())
+  schoolId      String
+  importJobId   String?
+  fileName      String
+  matchedKey    String?
+  studentId     String?
+  staffId       String?
+  status        String   @default("unmatched")
+  storedFileUrl String?
+  createdAt     DateTime @default(now())
+
+  school    School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  importJob ImportJob? @relation(fields: [importJobId], references: [id])
+  student   Student?   @relation(fields: [studentId], references: [id])
+  staff     Staff?     @relation(fields: [staffId], references: [id])
+
+  @@index([schoolId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Storage & audit
+// ---------------------------------------------------------------------------
+
+/// Storage abstraction record — `storageProvider` lets the same schema serve
+/// local-disk dev and S3-compatible production without a migration.
+/// `kind`: student_photo | staff_photo | school_logo | signature | generated_pdf | import_excel | import_zip
+model UploadedFile {
+  id              String   @id @default(cuid())
+  schoolId        String
+  kind            String
+  storageProvider String   @default("local")
+  path            String
+  originalName    String?
+  mimeType        String?
+  sizeBytes       Int?
+  createdAt       DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, kind])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  schoolId     String
+  userId       String?
+  action       String
+  entityType   String?
+  entityId     String?
+  metadataJson String?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, entityType, entityId])
+  @@index([schoolId, createdAt])
+}
