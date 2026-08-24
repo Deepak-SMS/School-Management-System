@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from "react";
 import type { CurrentUser, Role } from "@/types/user";
 import { mockCurrentUser } from "@/lib/mock-data/user";
 
@@ -51,19 +51,23 @@ function readRoleCookie(): Role | null {
   return value && value in ROLE_LABELS ? (value as Role) : null;
 }
 
-export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRoleState] = useState<Role>(mockCurrentUser.role);
+/** The cookie never pushes changes — `setRole` reloads the page instead. */
+function subscribeToRoleCookie() {
+  return () => {};
+}
 
-  // Read after mount rather than during render: the cookie isn't available
-  // during SSR, and reading it in render would desync server and client HTML.
-  useEffect(() => {
-    const stored = readRoleCookie();
-    if (stored) setRoleState(stored);
-  }, []);
+export function UserProvider({ children }: { children: React.ReactNode }) {
+  // The cookie is an external store, so read it through useSyncExternalStore
+  // rather than syncing it into state from an effect. The separate server
+  // snapshot keeps SSR output stable (no cookie access during render).
+  const role = useSyncExternalStore(
+    subscribeToRoleCookie,
+    () => readRoleCookie() ?? mockCurrentUser.role,
+    () => mockCurrentUser.role,
+  );
 
   const setRole = useCallback((next: Role) => {
     document.cookie = `${DEV_ROLE_COOKIE}=${next}; path=/; SameSite=Lax`;
-    setRoleState(next);
     // Reload so server components and API calls re-resolve under the new role.
     window.location.reload();
   }, []);

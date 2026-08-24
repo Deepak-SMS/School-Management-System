@@ -172,7 +172,7 @@ export async function GET() {
       alerts.push({
         id: "documents-expiring",
         severity: "warning",
-        message: `${expiringDocuments} employee document${expiringDocuments === 1 ? "" : "s"} expire within ${DOCUMENT_EXPIRY_WINDOW_DAYS} days.`,
+        message: `${expiringDocuments} employee document${expiringDocuments === 1 ? " expires" : "s expire"} within ${DOCUMENT_EXPIRY_WINDOW_DAYS} days.`,
         href: "/employees?documentStatus=expiring",
       });
     }

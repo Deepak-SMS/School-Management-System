@@ -81,10 +81,10 @@ export function EmployeeForm({
     defaultValues: { employmentStatus: "active", category: "teacher", country: "India", ...defaultValues },
   });
 
+  // Field-level bindings live in the section components below; the wizard shell
+  // only needs submission, per-step validation, and the error summary.
   const {
-    register,
     handleSubmit,
-    control,
     trigger,
     formState: { errors, isSubmitting },
   } = form;

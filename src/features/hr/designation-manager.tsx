@@ -31,15 +31,29 @@ export function DesignationManager() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<DesignationRecord | null>(null);
 
-  const load = useCallback(() => {
-    setError(false);
+  // A counter rather than a callback, so state is only ever set from an async
+  // callback — never synchronously in the effect body — and a superseded
+  // response can't overwrite a newer one.
+  const [reloadKey, setReloadKey] = useState(0);
+  const load = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
     designationService
       .list()
-      .then((r) => setRows(r.data))
-      .catch(() => setError(true));
-  }, []);
+      .then((r) => {
+        if (cancelled) return;
+        setRows(r.data);
+        setError(false);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
-  useEffect(load, [load]);
   useEffect(() => {
     hrLookupService.all().then(setLookups).catch(() => undefined);
   }, []);

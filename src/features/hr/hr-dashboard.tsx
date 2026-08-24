@@ -77,19 +77,29 @@ export function HrDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    setError(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const load = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
     fetch("/api/hr/dashboard")
       .then(async (r) => {
         const body = await r.json();
         if (!r.ok) throw body;
         return body as DashboardData;
       })
-      .then(setData)
-      .catch((e) => setError(e?.error ?? "Couldn't load the HR dashboard."));
-  }, []);
-
-  useEffect(load, [load]);
+      .then((body) => {
+        if (cancelled) return;
+        setData(body);
+        setError(null);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e?.error ?? "Couldn't load the HR dashboard.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
   if (error) return <ErrorState description={error} onRetry={load} />;
   if (!data) return <LoadingState />;

@@ -29,15 +29,27 @@ export function EmployeeTypeManager() {
   const [editing, setEditing] = useState<EmployeeTypeRecord | null>(null);
   const [deleting, setDeleting] = useState<EmployeeTypeRecord | null>(null);
 
-  const load = useCallback(() => {
-    setError(false);
+  // See designation-manager: a reload counter keeps setState out of the effect
+  // body and lets a superseded response be discarded.
+  const [reloadKey, setReloadKey] = useState(0);
+  const load = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
     employeeTypeService
       .list()
-      .then((r) => setRows(r.data))
-      .catch(() => setError(true));
-  }, []);
-
-  useEffect(load, [load]);
+      .then((r) => {
+        if (cancelled) return;
+        setRows(r.data);
+        setError(false);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
   async function confirmDelete() {
     if (!deleting) return;

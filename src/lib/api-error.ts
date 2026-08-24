@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { ForbiddenError } from "@/lib/authorize";
+import { InvalidTransitionError } from "@/lib/recruitment-pipeline";
 
 /**
  * Normalizes any thrown error into a clean JSON response — never a raw stack
@@ -19,6 +20,12 @@ export function apiError(error: unknown): NextResponse {
   // Authorization failure — 403, and never leaks which record was being accessed.
   if (error instanceof ForbiddenError) {
     return NextResponse.json({ error: error.message, permission: error.permission }, { status: 403 });
+  }
+
+  // An illegal recruitment pipeline move is the caller's mistake, not a server
+  // fault — 409, with the message naming what would have been allowed.
+  if (error instanceof InvalidTransitionError) {
+    return NextResponse.json({ error: error.message }, { status: 409 });
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {

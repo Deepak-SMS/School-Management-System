@@ -29,15 +29,25 @@ export function EmployeeDocumentsTab({ staffId, onChanged }: { staffId: string; 
   const [error, setError] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
 
-  const load = useCallback(() => {
-    setError(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const load = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
     employeeService
       .documents(staffId)
-      .then((r) => setDocs(r.data))
-      .catch(() => setError(true));
-  }, [staffId]);
-
-  useEffect(load, [load]);
+      .then((r) => {
+        if (cancelled) return;
+        setDocs(r.data);
+        setError(false);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [staffId, reloadKey]);
 
   async function review(doc: EmployeeDocument, status: "verified" | "rejected") {
     let rejectionNote: string | undefined;

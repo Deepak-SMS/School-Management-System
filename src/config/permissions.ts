@@ -49,7 +49,6 @@ const EVERY_ACTION: PermissionAction[] = [
   "convert",
 ];
 
-const FULL_ACCESS: PermissionAction[] = ["view", "create", "edit", "delete", "export", "activate", "deactivate"];
 const VIEW_EXPORT_EDIT: PermissionAction[] = ["view", "create", "edit", "export", "activate", "deactivate"];
 const VIEW_EXPORT: PermissionAction[] = ["view", "export"];
 const VIEW_ONLY: PermissionAction[] = ["view"];

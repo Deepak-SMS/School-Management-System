@@ -31,15 +31,25 @@ export default function EmployeeDetailPage({ params }: { params: Promise<{ id: s
   const [transferOpen, setTransferOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
 
-  const load = useCallback(() => {
-    setError(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const load = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
     employeeService
       .get(id)
-      .then(setEmployee)
-      .catch(() => setError(true));
-  }, [id]);
-
-  useEffect(load, [load]);
+      .then((e) => {
+        if (cancelled) return;
+        setEmployee(e);
+        setError(false);
+      })
+      .catch(() => {
+        if (!cancelled) setError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, reloadKey]);
 
   if (error) return <ErrorState className="mx-auto max-w-5xl px-6 py-16" onRetry={load} />;
   if (!employee) return <LoadingState className="mx-auto max-w-5xl px-6 py-16" />;
