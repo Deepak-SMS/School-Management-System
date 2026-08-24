@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
 import { staffInputSchema, type StaffInput } from "@/lib/validation/staff";
+
+/** Pre-validation shape (e.g. `employmentStatus` optional before its zod `.default()` applies) — what the form fields actually hold. */
+type StaffFormValues = z.input<typeof staffInputSchema>;
 import { BLOOD_GROUPS, EMPLOYEE_TYPES, EMPLOYMENT_STATUSES, GENDERS, STAFF_CATEGORIES, STAFF_CATEGORY_LABELS } from "@/lib/constants/people";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,13 +26,21 @@ interface StaffFormProps {
 
 export function StaffForm({ defaultValues, onSubmit, submitLabel = "Add staff member" }: StaffFormProps) {
   const [serverError, setServerError] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/departments?pageSize=100")
+      .then((r) => r.json())
+      .then((body) => setDepartments(body.data ?? []))
+      .catch(() => {});
+  }, []);
 
   const {
     register,
     handleSubmit,
     control,
     formState: { errors, isSubmitting },
-  } = useForm<StaffInput>({
+  } = useForm<StaffFormValues, unknown, StaffInput>({
     resolver: zodResolver(staffInputSchema),
     defaultValues: { employmentStatus: "active", category: "teacher", ...defaultValues },
   });
@@ -138,8 +150,27 @@ export function StaffForm({ defaultValues, onSubmit, submitLabel = "Add staff me
           <FormField label="Designation" required error={errors.designation?.message}>
             {(field) => <Input {...field} {...register("designation")} placeholder="Mathematics Teacher" />}
           </FormField>
-          <FormField label="Department" error={errors.department?.message}>
-            {(field) => <Input {...field} {...register("department")} />}
+          <FormField label="Department" error={errors.departmentId?.message}>
+            {(field) => (
+              <Controller
+                name="departmentId"
+                control={control}
+                render={({ field: selectField }) => (
+                  <Select value={selectField.value} onValueChange={selectField.onChange}>
+                    <SelectTrigger id={field.id}>
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            )}
           </FormField>
           <FormField label="Employee type" error={errors.employeeType?.message}>
             {(field) => (

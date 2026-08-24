@@ -22,16 +22,27 @@ function pick<T>(arr: readonly T[], seed: number): T {
 }
 
 async function main() {
+  const schoolInfo = {
+    address: "42 Lakeview Road",
+    city: "Pune",
+    state: "Maharashtra",
+    country: "India",
+    pinCode: "411045",
+    phone: "+91 20 4567 8900",
+    email: "info@greenfieldschool.example",
+    website: "www.greenfieldschool.example",
+    affiliationBoard: "CBSE",
+    schoolCode: "GF-2026",
+    principalName: "Vikram Rao",
+  };
   const school = await prisma.school.upsert({
     where: { id: "school_greenfield" },
-    update: {},
+    update: schoolInfo,
     create: {
       id: "school_greenfield",
       name: "Greenfield International School",
       shortName: "Greenfield",
-      city: "Pune",
-      state: "Maharashtra",
-      country: "India",
+      ...schoolInfo,
     },
   });
 
@@ -43,17 +54,24 @@ async function main() {
       label: "2026–27",
       startDate: new Date("2026-06-01"),
       endDate: new Date("2027-04-30"),
-      isCurrent: true,
+      status: "active",
     },
+  });
+
+  const campus = await prisma.campus.upsert({
+    where: { schoolId_code: { schoolId: school.id, code: "MAIN" } },
+    update: {},
+    create: { schoolId: school.id, name: "Main Campus", code: "MAIN", campusType: "main" },
   });
 
   const classNames = ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"];
   const classes = [];
   for (const [index, name] of classNames.entries()) {
+    const code = `C${6 + index}`;
     const cls = await prisma.class.upsert({
-      where: { schoolId_name: { schoolId: school.id, name } },
+      where: { schoolId_academicYearId_code: { schoolId: school.id, academicYearId: academicYear.id, code } },
       update: {},
-      create: { schoolId: school.id, name, sortOrder: index },
+      create: { schoolId: school.id, academicYearId: academicYear.id, campusId: campus.id, name, code, sortOrder: index },
     });
     classes.push(cls);
   }
@@ -65,7 +83,14 @@ async function main() {
       const section = await prisma.section.upsert({
         where: { classId_name: { classId: cls.id, name } },
         update: {},
-        create: { schoolId: school.id, classId: cls.id, name },
+        create: {
+          schoolId: school.id,
+          classId: cls.id,
+          academicYearId: academicYear.id,
+          campusId: campus.id,
+          name,
+          code: `${cls.code}-${name}`,
+        },
       });
       sections.push(section);
     }
@@ -120,6 +145,32 @@ async function main() {
     { name: "Farida Sheikh", designation: "Front Office Executive", category: "admin_staff", dept: "Administration" },
   ];
 
+  const departmentIds = new Map<string, string>();
+  async function departmentId(name: string): Promise<string> {
+    if (departmentIds.has(name)) return departmentIds.get(name)!;
+    const code = name.toUpperCase().replace(/[^A-Z0-9]+/g, "_").slice(0, 20);
+    const dept = await prisma.department.upsert({
+      where: { schoolId_code: { schoolId: school.id, code } },
+      update: {},
+      create: { schoolId: school.id, name, code },
+    });
+    departmentIds.set(name, dept.id);
+    return dept.id;
+  }
+
+  const designationIds = new Map<string, string>();
+  async function designationId(name: string): Promise<string> {
+    if (designationIds.has(name)) return designationIds.get(name)!;
+    const code = name.toUpperCase().replace(/[^A-Z0-9]+/g, "_").slice(0, 20);
+    const role = await prisma.designation.upsert({
+      where: { schoolId_code: { schoolId: school.id, code } },
+      update: {},
+      create: { schoolId: school.id, name, code },
+    });
+    designationIds.set(name, role.id);
+    return role.id;
+  }
+
   const existingStaff = await prisma.staff.count({ where: { schoolId: school.id } });
   if (existingStaff === 0) {
     let seq = 1;
@@ -129,8 +180,8 @@ async function main() {
           schoolId: school.id,
           employeeId: `EMP${String(seq++).padStart(3, "0")}`,
           fullName: t.name,
-          designation: t.designation,
-          department: t.dept,
+          designationId: await designationId(t.designation),
+          departmentId: await departmentId(t.dept),
           category: "teacher",
           mobileNumber: `+91 90${String(2000000 + seq * 91).slice(0, 8)}`,
           joiningDate: new Date(2019, seq % 12, 1),
@@ -144,8 +195,8 @@ async function main() {
           schoolId: school.id,
           employeeId: `EMP${String(seq++).padStart(3, "0")}`,
           fullName: s.name,
-          designation: s.designation,
-          department: s.dept,
+          designationId: await designationId(s.designation),
+          departmentId: await departmentId(s.dept),
           category: s.category,
           mobileNumber: `+91 90${String(2000000 + seq * 91).slice(0, 8)}`,
           joiningDate: new Date(2018, seq % 12, 1),
@@ -155,7 +206,152 @@ async function main() {
     }
   }
 
+  await seedSystemTemplates();
+
   console.log(`Seeded ${school.name}: ${classes.length} classes, 20 students, 8 staff (3 teachers + 5 staff).`);
+}
+
+interface ElementSeed {
+  side: "front" | "back";
+  type: string;
+  fieldKey?: string;
+  content?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize?: number;
+  fontWeight?: string;
+  textAlign?: string;
+  color?: string;
+  backgroundColor?: string;
+  zIndex?: number;
+}
+
+/** Shared back layout: every template documents the same information, just restyled. */
+function backElements(accentColor: string): ElementSeed[] {
+  return [
+    { side: "back", type: "text", content: "Emergency Information", x: 5, y: 4, width: 76, height: 5, fontSize: 6, fontWeight: "bold", color: accentColor },
+    { side: "back", type: "dynamic_field", fieldKey: "student.guardianName", x: 5, y: 10, width: 76, height: 5, fontSize: 6 },
+    { side: "back", type: "dynamic_field", fieldKey: "student.guardianPhone", x: 5, y: 16, width: 76, height: 5, fontSize: 6 },
+    { side: "back", type: "dynamic_field", fieldKey: "student.address", x: 5, y: 22, width: 76, height: 8, fontSize: 5.5 },
+    { side: "back", type: "text", content: "If found, please return to the school office below.", x: 5, y: 31, width: 76, height: 5, fontSize: 5, color: "#6b7280" },
+    { side: "back", type: "dynamic_field", fieldKey: "school.phone", x: 5, y: 37, width: 40, height: 5, fontSize: 5.5 },
+    { side: "back", type: "dynamic_field", fieldKey: "school.website", x: 45, y: 37, width: 36, height: 5, fontSize: 5.5 },
+    { side: "back", type: "signature", fieldKey: "school.principalSignature", x: 5, y: 44, width: 26, height: 8 },
+    { side: "back", type: "text", content: "Principal", x: 5, y: 52, width: 26, height: 4, fontSize: 4.5, color: "#6b7280" },
+    { side: "back", type: "qrcode", x: 60, y: 40, width: 16, height: 16 },
+  ];
+}
+
+const SYSTEM_TEMPLATES: {
+  name: string;
+  orientation: "portrait" | "landscape";
+  cardWidthMm: number;
+  cardHeightMm: number;
+  front: ElementSeed[];
+}[] = [
+  {
+    name: "Modern Blue",
+    orientation: "landscape",
+    cardWidthMm: 85.6,
+    cardHeightMm: 53.98,
+    front: [
+      { side: "front", type: "shape", x: 0, y: 0, width: 85.6, height: 15, backgroundColor: "#1d4ed8", zIndex: 0 },
+      { side: "front", type: "logo", fieldKey: "school.logo", x: 4, y: 2.5, width: 10, height: 10, zIndex: 2 },
+      { side: "front", type: "dynamic_field", fieldKey: "school.name", x: 16, y: 3, width: 66, height: 6, fontSize: 8, fontWeight: "bold", color: "#ffffff", zIndex: 2 },
+      { side: "front", type: "text", content: "STUDENT IDENTITY CARD", x: 16, y: 9, width: 66, height: 4, fontSize: 4.5, color: "#dbeafe", zIndex: 2 },
+      { side: "front", type: "photo", fieldKey: "student.photo", x: 5, y: 19, width: 22, height: 28, backgroundColor: "#e5e7eb", zIndex: 1 },
+      { side: "front", type: "dynamic_field", fieldKey: "student.name", x: 30, y: 18, width: 51, height: 6, fontSize: 7.5, fontWeight: "bold", color: "#111827" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.admissionNumber", x: 30, y: 25, width: 24, height: 5, fontSize: 6, color: "#374151" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.class", x: 55, y: 25, width: 13, height: 5, fontSize: 6, color: "#374151" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.section", x: 69, y: 25, width: 12, height: 5, fontSize: 6, color: "#374151" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.dateOfBirth", x: 30, y: 31, width: 30, height: 5, fontSize: 6, color: "#374151" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.bloodGroup", x: 30, y: 37, width: 30, height: 5, fontSize: 6, color: "#374151" },
+      { side: "front", type: "qrcode", x: 62, y: 34, width: 18, height: 18 },
+      { side: "front", type: "dynamic_field", fieldKey: "academicYear.label", x: 5, y: 48, width: 76, height: 4, fontSize: 4.5, color: "#6b7280", textAlign: "center" },
+    ],
+  },
+  {
+    name: "Classic School",
+    orientation: "landscape",
+    cardWidthMm: 85.6,
+    cardHeightMm: 53.98,
+    front: [
+      { side: "front", type: "shape", x: 0, y: 0, width: 85.6, height: 53.98, backgroundColor: "#fffdf7", zIndex: 0 },
+      { side: "front", type: "shape", x: 0, y: 0, width: 85.6, height: 3, backgroundColor: "#7f1d1d", zIndex: 1 },
+      { side: "front", type: "logo", fieldKey: "school.logo", x: 36.8, y: 4, width: 12, height: 12, zIndex: 2 },
+      { side: "front", type: "qrcode", x: 66, y: 4, width: 15, height: 15 },
+      { side: "front", type: "photo", fieldKey: "student.photo", x: 30.8, y: 17, width: 24, height: 21, backgroundColor: "#f3f4f6", zIndex: 1 },
+      { side: "front", type: "dynamic_field", fieldKey: "school.name", x: 5, y: 39, width: 76, height: 4.5, fontSize: 6.5, fontWeight: "bold", color: "#7f1d1d", textAlign: "center" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.name", x: 5, y: 43.2, width: 76, height: 4.5, fontSize: 6, fontWeight: "bold", color: "#111827", textAlign: "center" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.admissionNumber", x: 5, y: 47.4, width: 38, height: 4, fontSize: 5, color: "#374151", textAlign: "center" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.class", x: 43, y: 47.4, width: 19, height: 4, fontSize: 5, color: "#374151", textAlign: "center" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.section", x: 62, y: 47.4, width: 19, height: 4, fontSize: 5, color: "#374151", textAlign: "center" },
+    ],
+  },
+  {
+    name: "Minimal Professional",
+    orientation: "landscape",
+    cardWidthMm: 85.6,
+    cardHeightMm: 53.98,
+    front: [
+      { side: "front", type: "shape", x: 0, y: 0, width: 85.6, height: 53.98, backgroundColor: "#ffffff", zIndex: 0 },
+      { side: "front", type: "shape", x: 0, y: 0, width: 5, height: 53.98, backgroundColor: "#111827", zIndex: 1 },
+      { side: "front", type: "photo", fieldKey: "student.photo", x: 9, y: 8, width: 22, height: 28, backgroundColor: "#f3f4f6", zIndex: 1 },
+      { side: "front", type: "logo", fieldKey: "school.logo", x: 9, y: 38, width: 10, height: 10, zIndex: 2 },
+      { side: "front", type: "dynamic_field", fieldKey: "school.name", x: 34, y: 8, width: 47, height: 5, fontSize: 6, fontWeight: "bold", color: "#111827" },
+      { side: "front", type: "text", content: "STUDENT ID", x: 34, y: 13, width: 47, height: 4, fontSize: 4, color: "#6b7280" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.name", x: 34, y: 20, width: 47, height: 5.5, fontSize: 6.5, fontWeight: "bold", color: "#111827" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.admissionNumber", x: 34, y: 26, width: 24, height: 4.5, fontSize: 5, color: "#374151" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.class", x: 34, y: 31, width: 24, height: 4.5, fontSize: 5, color: "#374151" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.section", x: 34, y: 36, width: 24, height: 4.5, fontSize: 5, color: "#374151" },
+      { side: "front", type: "dynamic_field", fieldKey: "student.bloodGroup", x: 34, y: 41, width: 24, height: 4.5, fontSize: 5, color: "#374151" },
+      { side: "front", type: "qrcode", x: 63, y: 29, width: 17, height: 17 },
+    ],
+  },
+];
+
+async function seedSystemTemplates() {
+  const existing = await prisma.iDCardTemplate.count({ where: { isSystemTemplate: true } });
+  if (existing > 0) return;
+
+  for (const [index, tpl] of SYSTEM_TEMPLATES.entries()) {
+    const elements = [...tpl.front, ...backElements(index === 0 ? "#1d4ed8" : index === 1 ? "#7f1d1d" : "#111827")];
+    await prisma.iDCardTemplate.create({
+      data: {
+        schoolId: null,
+        isSystemTemplate: true,
+        name: tpl.name,
+        category: "student",
+        orientation: tpl.orientation,
+        cardWidthMm: tpl.cardWidthMm,
+        cardHeightMm: tpl.cardHeightMm,
+        isActive: true,
+        isDefault: index === 0,
+        elements: {
+          create: elements.map((el, zi) => ({
+            side: el.side,
+            type: el.type,
+            fieldKey: el.fieldKey,
+            content: el.content,
+            x: el.x,
+            y: el.y,
+            width: el.width,
+            height: el.height,
+            fontSize: el.fontSize,
+            fontWeight: el.fontWeight,
+            textAlign: el.textAlign,
+            color: el.color,
+            backgroundColor: el.backgroundColor,
+            zIndex: el.zIndex ?? zi,
+          })),
+        },
+      },
+    });
+  }
+
+  console.log(`Seeded ${SYSTEM_TEMPLATES.length} system ID card templates.`);
 }
 
 main()

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentSchoolId } from "@/lib/tenant";
-import { studentInputSchema } from "@/lib/validation/student";
+import { studentInputSchema, cleanEmptyStrings } from "@/lib/validation/student";
 import { createQrVerification } from "@/lib/qr-verification";
 import { apiError } from "@/lib/api-error";
 import type { Prisma } from "@/generated/prisma/client";
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   try {
     const schoolId = await getCurrentSchoolId();
     const body = await request.json();
-    const input = studentInputSchema.parse(body);
+    const input = cleanEmptyStrings(studentInputSchema.parse(body));
 
     const student = await prisma.$transaction(async (tx) => {
       const created = await tx.student.create({

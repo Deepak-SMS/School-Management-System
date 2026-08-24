@@ -1,12 +1,7 @@
 import { z } from "zod";
 import { BLOOD_GROUPS, GENDERS, STUDENT_STATUSES } from "@/lib/constants/people";
 
-const optionalString = z
-  .string()
-  .trim()
-  .max(255)
-  .optional()
-  .transform((v) => (v === "" ? undefined : v));
+const optionalString = z.string().trim().max(255).optional();
 
 export const studentInputSchema = z.object({
   admissionNumber: z.string().trim().min(1, "Admission number is required").max(50),
@@ -49,3 +44,5 @@ export const studentInputSchema = z.object({
 });
 
 export type StudentInput = z.infer<typeof studentInputSchema>;
+
+export { cleanEmptyStrings } from "./shared";

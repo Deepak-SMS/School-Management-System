@@ -1,23 +1,12 @@
 import { z } from "zod";
 import { BLOOD_GROUPS, EMPLOYEE_TYPES, EMPLOYMENT_STATUSES, GENDERS, STAFF_CATEGORIES } from "@/lib/constants/people";
 
-const optionalString = z
-  .string()
-  .trim()
-  .max(255)
-  .optional()
-  .transform((v) => (v === "" ? undefined : v));
-
-const phone = z
-  .string()
-  .trim()
-  .refine((v) => /^[0-9+\-\s()]{7,20}$/.test(v), "Invalid phone number");
+const optionalString = z.string().trim().max(255).optional();
 
 const optionalPhone = z
   .string()
   .trim()
   .optional()
-  .transform((v) => (v === "" ? undefined : v))
   .refine((v) => !v || /^[0-9+\-\s()]{7,20}$/.test(v), "Invalid phone number");
 
 export const staffInputSchema = z.object({
@@ -32,15 +21,17 @@ export const staffInputSchema = z.object({
   gender: z.enum(GENDERS).optional(),
   bloodGroup: z.enum(BLOOD_GROUPS).optional(),
   designation: z.string().trim().min(1, "Designation is required").max(150),
-  department: optionalString,
+  departmentId: optionalString,
   category: z.enum(STAFF_CATEGORIES),
-  mobileNumber: phone,
+  mobileNumber: z
+    .string()
+    .trim()
+    .refine((v) => /^[0-9+\-\s()]{7,20}$/.test(v), "Invalid phone number"),
   email: z
     .string()
     .trim()
-    .email("Invalid email address")
     .optional()
-    .or(z.literal("").transform(() => undefined)),
+    .refine((v) => !v || z.string().email().safeParse(v).success, "Invalid email address"),
   emergencyContact: optionalPhone,
   address: optionalString,
   joiningDate: z

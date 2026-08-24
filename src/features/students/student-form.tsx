@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
 import { studentInputSchema, type StudentInput } from "@/lib/validation/student";
+
+/** Pre-validation shape (e.g. `status` optional before its zod `.default()` applies) — what the form fields actually hold. */
+type StudentFormValues = z.input<typeof studentInputSchema>;
 import { BLOOD_GROUPS, GENDERS, STUDENT_STATUSES } from "@/lib/constants/people";
 import { schoolStructureService } from "@/services/schoolStructureService";
 import type { SchoolStructure } from "@/types/student";
@@ -33,7 +37,7 @@ export function StudentForm({ defaultValues, onSubmit, submitLabel = "Add studen
     control,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm<StudentInput>({
+  } = useForm<StudentFormValues, unknown, StudentInput>({
     resolver: zodResolver(studentInputSchema),
     defaultValues: { status: "active", ...defaultValues },
   });

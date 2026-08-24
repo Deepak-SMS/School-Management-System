@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentSchoolId } from "@/lib/tenant";
 import { staffInputSchema } from "@/lib/validation/staff";
 import { createQrVerification } from "@/lib/qr-verification";
+import { resolveDesignationId } from "@/lib/resolve-designation";
 import { apiError } from "@/lib/api-error";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -20,13 +21,17 @@ export async function GET(request: NextRequest) {
     ...(category && { category }),
     ...(employmentStatus && { employmentStatus }),
     ...(q && {
-      OR: [{ fullName: { contains: q } }, { employeeId: { contains: q } }, { designation: { contains: q } }],
+      OR: [{ fullName: { contains: q } }, { employeeId: { contains: q } }, { designation: { name: { contains: q } } }],
     }),
   };
 
-  const [data, total] = await Promise.all([
+  const [rows, total] = await Promise.all([
     prisma.staff.findMany({
       where,
+      include: {
+        department: { select: { id: true, name: true } },
+        designation: { select: { name: true } },
+      },
       orderBy: { fullName: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -34,6 +39,7 @@ export async function GET(request: NextRequest) {
     prisma.staff.count({ where }),
   ]);
 
+  const data = rows.map(({ designation, ...rest }) => ({ ...rest, designation: designation?.name ?? "" }));
   return NextResponse.json({ data, total, page, pageSize });
 }
 
@@ -42,6 +48,7 @@ export async function POST(request: NextRequest) {
     const schoolId = await getCurrentSchoolId();
     const body = await request.json();
     const input = staffInputSchema.parse(body);
+    const designationId = await resolveDesignationId(schoolId, input.designation);
 
     const staff = await prisma.$transaction(async (tx) => {
       const created = await tx.staff.create({
@@ -53,8 +60,8 @@ export async function POST(request: NextRequest) {
           dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : undefined,
           gender: input.gender,
           bloodGroup: input.bloodGroup,
-          designation: input.designation,
-          department: input.department,
+          designationId,
+          departmentId: input.departmentId,
           category: input.category,
           mobileNumber: input.mobileNumber,
           email: input.email,

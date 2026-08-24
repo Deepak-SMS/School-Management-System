@@ -8,7 +8,8 @@ export interface StaffRecord {
   gender?: string | null;
   bloodGroup?: string | null;
   designation: string;
-  department?: string | null;
+  departmentId?: string | null;
+  department?: { id: string; name: string } | null;
   category: string;
   mobileNumber: string;
   email?: string | null;

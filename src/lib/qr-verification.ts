@@ -53,6 +53,6 @@ export async function createQrVerification(
 export async function findByVerificationCode(code: string) {
   return prisma.qRVerification.findUnique({
     where: { code },
-    include: { student: true, staff: true, school: true, idCard: true },
+    include: { student: true, staff: { include: { designation: { select: { name: true } } } }, school: true, idCard: true },
   });
 }

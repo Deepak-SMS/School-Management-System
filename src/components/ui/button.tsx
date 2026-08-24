@@ -39,9 +39,19 @@ export interface ButtonProps
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild, isLoading, disabled, children, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
+    // Slot (asChild) requires exactly one child element — never mix in the
+    // loading spinner here, since `{isLoading && <X/>}` still counts as a
+    // second child (as `false`) even when not loading.
+    if (asChild) {
+      return (
+        <Slot ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props}>
+          {children}
+        </Slot>
+      );
+    }
+
     return (
-      <Comp
+      <button
         ref={ref}
         className={cn(buttonVariants({ variant, size }), className)}
         disabled={disabled || isLoading}
@@ -49,7 +59,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {isLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
         {children}
-      </Comp>
+      </button>
     );
   },
 );

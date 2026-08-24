@@ -23,16 +23,52 @@ datasource db {
 // Tenancy & identity
 // ---------------------------------------------------------------------------
 
+/// Fields below `logoUrl` are presentational "School Information" — what
+/// prints on an ID card (address, board, principal signature) — kept on
+/// School itself rather than a separate 1:1 table since it's never queried
+/// independently of the tenant record.
 model School {
-  id        String   @id @default(cuid())
-  name      String
-  shortName String
-  city      String?
-  state     String?
-  country   String?
-  logoUrl   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  name                  String
+  shortName             String
+  address               String?
+  city                  String?
+  state                 String?
+  country               String?
+  pinCode               String?
+  phone                 String?
+  email                 String?
+  website               String?
+  affiliationBoard      String?
+  schoolCode            String?
+  principalName         String?
+  logoUrl               String?
+  bannerUrl             String?
+  principalSignatureUrl String?
+  schoolSealUrl         String?
+  // Profile fields (School Profile module)
+  registrationNumber    String?
+  schoolType            String?
+  institutionType       String?
+  establishedYear       Int?
+  alternatePhone        String?
+  administratorName     String?
+  administrativeEmail   String?
+  administrativePhone   String?
+  timeZone              String?
+  currency              String?
+  dateFormat            String?
+  language              String?
+  weekStartDay          String?
+  /// JSON array of weekday strings, e.g. ["monday",...,"friday"] — SQLite has no array type.
+  workingDaysJson       String?
+  facebookUrl           String?
+  instagramUrl          String?
+  youtubeUrl            String?
+  linkedinUrl           String?
+  twitterUrl            String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   memberships          SchoolMembership[]
   academicYears        AcademicYear[]
@@ -40,6 +76,13 @@ model School {
   sections             Section[]
   students             Student[]
   staff                Staff[]
+  campuses             Campus[]
+  subjects             Subject[]
+  subjectAssignments   SubjectAssignment[]
+  departments          Department[]
+  designations         Designation[]
+  staffDocuments       StaffDocument[]
+  staffActivityLogs    StaffActivityLog[]
   idCardTemplates      IDCardTemplate[]
   idCards              IDCard[]
   idCardGenerationJobs IDCardGenerationJob[]
@@ -87,49 +130,224 @@ model SchoolMembership {
 // School structure
 // ---------------------------------------------------------------------------
 
+/// `status`: draft | active | upcoming | archived — only one row per school should be "active"
+/// (enforced in the API layer; SQLite has no partial-unique-index support via Prisma).
 model AcademicYear {
-  id        String   @id @default(cuid())
-  schoolId  String
-  label     String
-  startDate DateTime
-  endDate   DateTime
-  isCurrent Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id                    String    @id @default(cuid())
+  schoolId              String
+  label                 String
+  startDate             DateTime
+  endDate               DateTime
+  admissionStartDate    DateTime?
+  admissionEndDate      DateTime?
+  promotionDate         DateTime?
+  resultPublicationDate DateTime?
+  status                String    @default("draft")
+  createdAt             DateTime  @default(now())
 
-  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  students Student[]
+  school      School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  students    Student[]
+  classes     Class[]
+  sections    Section[]
+  assignments SubjectAssignment[]
 
   @@unique([schoolId, label])
   @@index([schoolId])
+  @@index([schoolId, status])
 }
 
-model Class {
-  id        String   @id @default(cuid())
-  schoolId  String
-  name      String
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
+/// `campusType`: main | junior | senior | college | hostel | other
+/// `status`: active | inactive
+model Campus {
+  id              String   @id @default(cuid())
+  schoolId        String
+  name            String
+  code            String
+  campusType      String   @default("main")
+  headStaffId     String?
+  address         String?
+  city            String?
+  state           String?
+  country         String?
+  pinCode         String?
+  phone           String?
+  email           String?
+  website         String?
+  studentCapacity Int?
+  staffCapacity   Int?
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  sections Section[]
-  students Student[]
+  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  head        Staff?       @relation("CampusHead", fields: [headStaffId], references: [id])
+  classes     Class[]
+  sections    Section[]
+  departments Department[]
+  staff       Staff[]      @relation("StaffCampus")
 
-  @@unique([schoolId, name])
+  @@unique([schoolId, code])
   @@index([schoolId])
 }
 
-model Section {
-  id        String   @id @default(cuid())
-  schoolId  String
-  classId   String
-  name      String
-  createdAt DateTime @default(now())
+/// `status`: active | inactive
+model Class {
+  id             String   @id @default(cuid())
+  schoolId       String
+  academicYearId String
+  campusId       String
+  name           String
+  code           String
+  sortOrder      Int      @default(0)
+  capacity       Int?
+  classTeacherId String?
+  gradingSystem  String?
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  class    Class     @relation(fields: [classId], references: [id], onDelete: Cascade)
-  students Student[]
+  school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYear       AcademicYear        @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  campus             Campus              @relation(fields: [campusId], references: [id])
+  classTeacher       Staff?              @relation("ClassTeacher", fields: [classTeacherId], references: [id])
+  sections           Section[]
+  students           Student[]
+  subjectAssignments SubjectAssignment[]
+
+  @@unique([schoolId, academicYearId, name])
+  @@unique([schoolId, academicYearId, code])
+  @@index([schoolId])
+  @@index([campusId])
+}
+
+/// `status`: active | inactive
+model Section {
+  id             String   @id @default(cuid())
+  schoolId       String
+  classId        String
+  academicYearId String
+  campusId       String
+  name           String
+  code           String
+  room           String?
+  classTeacherId String?
+  capacity       Int?
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  class              Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
+  academicYear       AcademicYear        @relation(fields: [academicYearId], references: [id])
+  campus             Campus              @relation(fields: [campusId], references: [id])
+  classTeacher       Staff?              @relation("SectionTeacher", fields: [classTeacherId], references: [id])
+  students           Student[]
+  subjectAssignments SubjectAssignment[]
 
   @@unique([classId, name])
+  @@unique([classId, code])
+  @@index([schoolId])
+}
+
+/// `subjectType`: core | elective | optional | co_curricular | practical | language
+/// `natureType`: theory | practical
+/// `status`: active | inactive
+model Subject {
+  id            String   @id @default(cuid())
+  schoolId      String
+  name          String
+  code          String
+  subjectType   String   @default("core")
+  description   String?
+  natureType    String   @default("theory")
+  maxMarks      Int?
+  passingMarks  Int?
+  credits       Float?
+  gradingSystem String?
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school      School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  assignments SubjectAssignment[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
+/// Assigns a Subject to a Class (optionally a single Section) for an Academic Year, with an
+/// optional teacher. `sectionId = null` means "applies to every section of the class".
+model SubjectAssignment {
+  id             String   @id @default(cuid())
+  schoolId       String
+  subjectId      String
+  academicYearId String
+  classId        String
+  sectionId      String?
+  teacherId      String?
+  createdAt      DateTime @default(now())
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subject      Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+  class        Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  section      Section?     @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  teacher      Staff?       @relation(fields: [teacherId], references: [id])
+
+  @@unique([subjectId, academicYearId, classId, sectionId])
+  @@index([schoolId])
+  @@index([classId])
+}
+
+/// `departmentType`: academic | administration | finance | hr | operations | support | transport | library | it | other
+/// `status`: active | inactive
+model Department {
+  id             String   @id @default(cuid())
+  schoolId       String
+  campusId       String?
+  name           String
+  code           String
+  departmentType String   @default("academic")
+  headStaffId    String?
+  description    String?
+  email          String?
+  phone          String?
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  campus       Campus?       @relation(fields: [campusId], references: [id])
+  head         Staff?        @relation("DepartmentHead", fields: [headStaffId], references: [id])
+  staff        Staff[]       @relation("StaffDepartment")
+  designations Designation[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
+/// A job title within the school ("Mathematics Teacher", "Vice Principal"), owned
+/// per-tenant so every school defines its own ladder rather than inheriting a
+/// hardcoded list. `level` orders the hierarchy for reporting/appraisal (higher =
+/// more senior); it is not a permission grant — authorization comes from Role.
+/// `status`: active | inactive
+model Designation {
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  code         String
+  departmentId String?
+  level        Int      @default(0)
+  description  String?
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school     School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id])
+  staff      Staff[]
+
+  @@unique([schoolId, code])
   @@index([schoolId])
 }
 
@@ -183,39 +401,165 @@ model Student {
   @@index([schoolId, status])
 }
 
+/// The employee master record — HR treats "employee" and "staff" as the same
+/// entity rather than keeping a parallel table, so a teacher has exactly one
+/// identity across academics, payroll, and ID cards.
+///
 /// `category`: teacher | principal | admin_staff | accountant | librarian | driver | security | support_staff | other
-/// `employmentStatus`: active | inactive | resigned | terminated
+/// `employmentStatus`: active | probation | on_leave | notice_period | inactive | resigned | terminated | retired
+/// `maritalStatus`: single | married | divorced | widowed
+///
+/// Bank/PAN fields are sensitive: they are stripped from API responses unless
+/// the caller holds `hr:employee:view_sensitive` (see src/lib/permissions.ts).
 model Staff {
-  id               String    @id @default(cuid())
-  schoolId         String
-  employeeId       String
-  fullName         String
-  photoUrl         String?
-  dateOfBirth      DateTime?
-  gender           String?
-  bloodGroup       String?
-  designation      String
-  department       String?
-  category         String
-  mobileNumber     String
-  email            String?
-  emergencyContact String?
-  address          String?
-  joiningDate      DateTime?
-  employeeType     String?
-  employmentStatus String    @default("active")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  schoolId           String
+  employeeId         String
+  fullName           String
+  photoUrl           String?
+  dateOfBirth        DateTime?
+  gender             String?
+  bloodGroup         String?
+  maritalStatus      String?
+  designationId      String?
+  departmentId       String?
+  campusId           String?
+  category           String
+  mobileNumber       String
+  email              String?
+  emergencyContact   String?
+  address            String?
+  city               String?
+  state              String?
+  country            String?
+  pinCode            String?
+  joiningDate        DateTime?
+  confirmationDate   DateTime?
+  probationEndDate   DateTime?
+  reportingManagerId String?
+  employeeType       String?
+  employmentStatus   String    @default("active")
+  panNumber          String?
+  bankName           String?
+  bankAccountNumber  String?
+  bankIfsc           String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  school          School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  idCards         IDCard[]
-  qrVerification  QRVerification?
-  generationItems IDCardGenerationItem[]
-  photoMappings   PhotoMapping[]
+  school             School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  department         Department?            @relation("StaffDepartment", fields: [departmentId], references: [id])
+  designation        Designation?           @relation(fields: [designationId], references: [id])
+  campus             Campus?                @relation("StaffCampus", fields: [campusId], references: [id])
+  reportingManager   Staff?                 @relation("ReportingLine", fields: [reportingManagerId], references: [id])
+  directReports      Staff[]                @relation("ReportingLine")
+  educations         StaffEducation[]
+  experiences        StaffExperience[]
+  documents          StaffDocument[]
+  activityLogs       StaffActivityLog[]
+  idCards            IDCard[]
+  qrVerification     QRVerification?
+  generationItems    IDCardGenerationItem[]
+  photoMappings      PhotoMapping[]
+  classesAsTeacher   Class[]                @relation("ClassTeacher")
+  sectionsAsTeacher  Section[]              @relation("SectionTeacher")
+  campusesHeaded     Campus[]               @relation("CampusHead")
+  departmentsHeaded  Department[]           @relation("DepartmentHead")
+  subjectAssignments SubjectAssignment[]
 
   @@unique([schoolId, employeeId])
   @@index([schoolId, category])
   @@index([schoolId, employmentStatus])
+  @@index([schoolId, departmentId])
+}
+
+model StaffEducation {
+  id             String   @id @default(cuid())
+  staffId        String
+  degree         String
+  institution    String?
+  board          String?
+  passingYear    Int?
+  percentage     Float?
+  uploadedFileId String?
+  createdAt      DateTime @default(now())
+
+  staff        Staff         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  uploadedFile UploadedFile? @relation(fields: [uploadedFileId], references: [id])
+
+  @@index([staffId])
+}
+
+model StaffExperience {
+  id             String    @id @default(cuid())
+  staffId        String
+  organization   String
+  designation    String?
+  startDate      DateTime?
+  endDate        DateTime?
+  description    String?
+  uploadedFileId String?
+  createdAt      DateTime  @default(now())
+
+  staff        Staff         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  uploadedFile UploadedFile? @relation(fields: [uploadedFileId], references: [id])
+
+  @@index([staffId])
+}
+
+/// An employee's filed document. The bytes live in UploadedFile; this row carries
+/// the HR meaning (what kind, verified by whom, when it expires). Downloads are
+/// streamed through a permission-checked route — the stored path is never linked
+/// publicly.
+///
+/// `documentType`: aadhaar | pan | passport | photo | education_certificate |
+///   experience_certificate | appointment_letter | contract | salary_certificate |
+///   promotion_letter | training_certificate | resignation_letter | relieving_letter | other
+/// `status`: pending | verified | rejected
+model StaffDocument {
+  id             String    @id @default(cuid())
+  schoolId       String
+  staffId        String
+  documentType   String
+  title          String?
+  uploadedFileId String
+  status         String    @default("pending")
+  expiryDate     DateTime?
+  version        Int       @default(1)
+  uploadedById   String?
+  verifiedById   String?
+  verifiedAt     DateTime?
+  rejectionNote  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff        Staff        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  uploadedFile UploadedFile @relation(fields: [uploadedFileId], references: [id])
+
+  @@index([schoolId, status])
+  @@index([staffId, documentType])
+  @@index([schoolId, expiryDate])
+}
+
+/// HR-scoped timeline shown on the employee profile. Written alongside AuditLog by
+/// the same transaction, but kept separate: AuditLog is the tamper-evident
+/// compliance record across every module, this is a readable per-employee history.
+///
+/// `type`: profile_updated | department_changed | designation_changed | status_changed |
+///   document_uploaded | document_verified | document_rejected | created
+model StaffActivityLog {
+  id          String   @id @default(cuid())
+  schoolId    String
+  staffId     String
+  type        String
+  description String
+  actorId     String?
+  occurredAt  DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff  Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, occurredAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -224,27 +568,38 @@ model Staff {
 
 /// `category`: student | staff | teacher | custom
 /// `orientation`: portrait | landscape
+///
+/// System templates (`isSystemTemplate = true`) ship with the product, have
+/// `schoolId = null`, and are shared read-only across every tenant — never
+/// mutated in place. A school customizes one via "Save as School Template",
+/// which duplicates it into a normal school-owned row with
+/// `basedOnTemplateId` pointing back at the system original for lineage.
 model IDCardTemplate {
-  id             String   @id @default(cuid())
-  schoolId       String
-  name           String
-  category       String
-  cardWidthMm    Float    @default(85.6)
-  cardHeightMm   Float    @default(53.98)
-  cornerRadiusMm Float    @default(3.18)
-  orientation    String   @default("portrait")
-  isDefault      Boolean  @default(false)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                String   @id @default(cuid())
+  schoolId          String?
+  isSystemTemplate  Boolean  @default(false)
+  basedOnTemplateId String?
+  name              String
+  category          String
+  cardWidthMm       Float    @default(85.6)
+  cardHeightMm      Float    @default(53.98)
+  cornerRadiusMm    Float    @default(3.18)
+  orientation       String   @default("portrait")
+  isDefault         Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  school         School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  elements       DesignElement[]
-  versions       TemplateVersion[]
-  idCards        IDCard[]
-  generationJobs IDCardGenerationJob[]
+  school           School?               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  basedOnTemplate  IDCardTemplate?       @relation("TemplateLineage", fields: [basedOnTemplateId], references: [id])
+  derivedTemplates IDCardTemplate[]      @relation("TemplateLineage")
+  elements         DesignElement[]
+  versions         TemplateVersion[]
+  idCards          IDCard[]
+  generationJobs   IDCardGenerationJob[]
 
   @@index([schoolId, category])
+  @@index([isSystemTemplate])
 }
 
 /// `side`: front | back
@@ -495,7 +850,7 @@ model PhotoMapping {
 
 /// Storage abstraction record — `storageProvider` lets the same schema serve
 /// local-disk dev and S3-compatible production without a migration.
-/// `kind`: student_photo | staff_photo | school_logo | signature | generated_pdf | import_excel | import_zip
+/// `kind`: student_photo | staff_photo | staff_document | school_logo | signature | generated_pdf | import_excel | import_zip
 model UploadedFile {
   id              String   @id @default(cuid())
   schoolId        String
@@ -505,9 +860,13 @@ model UploadedFile {
   originalName    String?
   mimeType        String?
   sizeBytes       Int?
+  uploadedById    String?
   createdAt       DateTime @default(now())
 
-  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staffDocuments   StaffDocument[]
+  staffEducations  StaffEducation[]
+  staffExperiences StaffExperience[]
 
   @@index([schoolId, kind])
 }

@@ -43,9 +43,9 @@ export function StudentTable() {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
     const timeout = setTimeout(() => {
+      setLoading(true);
+      setError(null);
       studentService
         .list({ q: search || undefined, classId: classId || undefined, status: status || undefined, page, pageSize: PAGE_SIZE })
         .then(setResult)

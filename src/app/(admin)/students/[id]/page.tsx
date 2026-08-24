@@ -51,14 +51,31 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
         <StudentForm
           submitLabel="Save changes"
           defaultValues={{
-            ...student,
-            sectionId: student.section?.id,
-            classId: student.class.id,
-            academicYearId: student.academicYear.id,
+            admissionNumber: student.admissionNumber,
+            firstName: student.firstName,
+            middleName: student.middleName ?? undefined,
+            lastName: student.lastName,
+            photoUrl: student.photoUrl ?? undefined,
             dateOfBirth: student.dateOfBirth?.slice(0, 10),
             gender: student.gender as StudentInput["gender"],
             bloodGroup: student.bloodGroup as StudentInput["bloodGroup"],
+            academicYearId: student.academicYear.id,
+            classId: student.class.id,
+            sectionId: student.section?.id,
+            rollNumber: student.rollNumber ?? undefined,
+            house: student.house ?? undefined,
             status: student.status as StudentInput["status"],
+            guardianName: student.guardianName ?? undefined,
+            guardianPhone: student.guardianPhone ?? undefined,
+            emergencyContact: student.emergencyContact ?? undefined,
+            address: student.address ?? undefined,
+            city: student.city ?? undefined,
+            state: student.state ?? undefined,
+            country: student.country ?? undefined,
+            pinCode: student.pinCode ?? undefined,
+            busNumber: student.busNumber ?? undefined,
+            route: student.route ?? undefined,
+            pickupPoint: student.pickupPoint ?? undefined,
           }}
           onSubmit={async (input) => {
             await studentService.update(id, input);
@@ -125,7 +142,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
             <div>
               <p className="font-mono font-medium text-foreground">VERIFY-{student.qrVerification.code}</p>
               <p className="text-muted-foreground">
-                Generated automatically — this is what the ID card's QR code will encode once cards are generated.
+                Generated automatically — this is what the ID card&apos;s QR code will encode once cards are generated.
               </p>
             </div>
           </CardContent>

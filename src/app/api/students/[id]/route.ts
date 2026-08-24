@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentSchoolId } from "@/lib/tenant";
-import { studentInputSchema } from "@/lib/validation/student";
+import { studentInputSchema, cleanEmptyStrings } from "@/lib/validation/student";
 import { apiError } from "@/lib/api-error";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,7 +20,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const schoolId = await getCurrentSchoolId();
     const { id } = await params;
     const body = await request.json();
-    const input = studentInputSchema.partial().parse(body);
+    const input = cleanEmptyStrings(studentInputSchema.partial().parse(body));
 
     const existing = await prisma.student.findFirst({ where: { id, schoolId } });
     if (!existing) return NextResponse.json({ error: "Student not found." }, { status: 404 });
