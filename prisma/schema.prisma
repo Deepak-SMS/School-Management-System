@@ -81,8 +81,18 @@ model School {
   subjectAssignments   SubjectAssignment[]
   departments          Department[]
   designations         Designation[]
+  employeeTypes        EmployeeType[]
   staffDocuments       StaffDocument[]
   staffActivityLogs    StaffActivityLog[]
+  staffTransfers       StaffTransfer[]
+  jobPositions         JobPosition[]
+  vacancies            Vacancy[]
+  candidates           Candidate[]
+  applications         Application[]
+  interviews           Interview[]
+  demoClasses          DemoClass[]
+  offers               Offer[]
+  candidateDocuments   CandidateDocument[]
   idCardTemplates      IDCardTemplate[]
   idCards              IDCard[]
   idCardGenerationJobs IDCardGenerationJob[]
@@ -409,14 +419,26 @@ model Student {
 /// `employmentStatus`: active | probation | on_leave | notice_period | inactive | resigned | terminated | retired
 /// `maritalStatus`: single | married | divorced | widowed
 ///
-/// Bank/PAN fields are sensitive: they are stripped from API responses unless
-/// the caller holds `hr:employee:view_sensitive` (see src/lib/permissions.ts).
+/// Bank/PAN/salary fields are sensitive: they are stripped from API responses
+/// unless the caller holds the `employeeSalary:view` permission
+/// (see src/lib/authorize.ts).
+///
+/// `fullName` is a DERIVED display column, not a second source of truth: the API
+/// layer composes it from firstName/middleName/lastName on every write (see
+/// composeFullName in src/lib/validation/staff.ts). It exists because ~46 call
+/// sites across academics/ID-cards select a single teacher name for dropdowns
+/// and labels; never set it directly.
 model Staff {
   id                 String    @id @default(cuid())
   schoolId           String
   employeeId         String
   fullName           String
+  firstName          String?
+  middleName         String?
+  lastName           String?
+  preferredName      String?
   photoUrl           String?
+  photoFileId        String?
   dateOfBirth        DateTime?
   gender             String?
   bloodGroup         String?
@@ -424,11 +446,18 @@ model Staff {
   designationId      String?
   departmentId       String?
   campusId           String?
+  employeeTypeId     String?
   category           String
   mobileNumber       String
+  alternateNumber    String?
   email              String?
+  officialEmail      String?
   emergencyContact   String?
+  emergencyName      String?
+  emergencyRelation  String?
+  emergencyAddress   String?
   address            String?
+  permanentAddress   String?
   city               String?
   state              String?
   country            String?
@@ -436,13 +465,17 @@ model Staff {
   joiningDate        DateTime?
   confirmationDate   DateTime?
   probationEndDate   DateTime?
+  probationMonths    Int?
+  workLocation       String?
   reportingManagerId String?
-  employeeType       String?
   employmentStatus   String    @default("active")
   panNumber          String?
   bankName           String?
   bankAccountNumber  String?
   bankIfsc           String?
+  bankAccountHolder  String?
+  pfNumber           String?
+  esicNumber         String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -450,12 +483,18 @@ model Staff {
   department         Department?            @relation("StaffDepartment", fields: [departmentId], references: [id])
   designation        Designation?           @relation(fields: [designationId], references: [id])
   campus             Campus?                @relation("StaffCampus", fields: [campusId], references: [id])
+  employeeTypeRef    EmployeeType?          @relation(fields: [employeeTypeId], references: [id])
   reportingManager   Staff?                 @relation("ReportingLine", fields: [reportingManagerId], references: [id])
   directReports      Staff[]                @relation("ReportingLine")
   educations         StaffEducation[]
   experiences        StaffExperience[]
   documents          StaffDocument[]
   activityLogs       StaffActivityLog[]
+  transfers          StaffTransfer[]
+  convertedFrom      Candidate[]            @relation("CandidateToStaff")
+  vacanciesManaged   Vacancy[]              @relation("HiringManager")
+  interviewPanels    InterviewPanelMember[]
+  interviewEvals     InterviewEvaluation[]  @relation("Evaluator")
   idCards            IDCard[]
   qrVerification     QRVerification?
   generationItems    IDCardGenerationItem[]
@@ -560,6 +599,372 @@ model StaffActivityLog {
   staff  Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
   @@index([staffId, occurredAt])
+}
+
+/// Configurable employment types (Permanent, Contract, Visiting Faculty, Intern...).
+/// A master table rather than a hardcoded constant so each school defines its own
+/// set — `isPaid` lets payroll skip unpaid types without special-casing names.
+/// `status`: active | inactive
+model EmployeeType {
+  id        String   @id @default(cuid())
+  schoolId  String
+  name      String
+  code      String
+  isPaid    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff     Staff[]
+  vacancies Vacancy[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
+/// A department/campus/designation/manager change, kept as an immutable row so the
+/// previous value is never overwritten (spec: "never overwrite history"). Applying a
+/// transfer mutates Staff and writes one of these plus a StaffActivityLog entry.
+///
+/// `transferType`: department | campus | designation | manager | location | multiple
+/// `status`: pending | approved | applied | cancelled
+model StaffTransfer {
+  id                String   @id @default(cuid())
+  schoolId          String
+  staffId           String
+  transferType      String
+  fromDepartmentId  String?
+  toDepartmentId    String?
+  fromDesignationId String?
+  toDesignationId   String?
+  fromCampusId      String?
+  toCampusId        String?
+  fromManagerId     String?
+  toManagerId       String?
+  fromWorkLocation  String?
+  toWorkLocation    String?
+  reason            String?
+  effectiveDate     DateTime
+  approvedById      String?
+  appliedAt         DateTime?
+  status            String   @default("pending")
+  createdAt         DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff  Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
+  @@index([staffId, effectiveDate])
+}
+
+// ---------------------------------------------------------------------------
+// Recruitment
+// ---------------------------------------------------------------------------
+
+/// A reusable job template ("Mathematics Teacher") that many Vacancies can be
+/// opened from, so recurring hiring doesn't retype qualification/skills each time.
+/// `skillsJson`: JSON array of strings — SQLite has no array type.
+/// `status`: active | inactive
+model JobPosition {
+  id                      String   @id @default(cuid())
+  schoolId                String
+  title                   String
+  departmentId            String?
+  designationId           String?
+  employeeTypeId          String?
+  requiredQualification   String?
+  requiredExperienceYears Float?
+  skillsJson              String?
+  salaryRangeMin          Float?
+  salaryRangeMax          Float?
+  description             String?
+  responsibilities        String?
+  status                  String   @default("active")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  vacancies Vacancy[]
+
+  @@index([schoolId, status])
+}
+
+/// An actual opening being hired for. `code` is the human reference (VAC-2026-001),
+/// unique per school.
+/// `status`: draft | open | on_hold | closed | cancelled
+model Vacancy {
+  id                      String    @id @default(cuid())
+  schoolId                String
+  code                    String
+  title                   String
+  jobPositionId           String?
+  departmentId            String?
+  designationId           String?
+  campusId                String?
+  employeeTypeId          String?
+  positionsCount          Int       @default(1)
+  salaryRangeMin          Float?
+  salaryRangeMax          Float?
+  requiredQualification   String?
+  requiredExperienceYears Float?
+  skillsJson              String?
+  description             String?
+  responsibilities        String?
+  openingDate             DateTime?
+  closingDate             DateTime?
+  hiringManagerId         String?
+  status                  String    @default("draft")
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  school        School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  jobPosition   JobPosition?  @relation(fields: [jobPositionId], references: [id])
+  employeeType  EmployeeType? @relation(fields: [employeeTypeId], references: [id])
+  hiringManager Staff?        @relation("HiringManager", fields: [hiringManagerId], references: [id])
+  applications  Application[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId, status])
+}
+
+/// A person in the talent pool. Deliberately has NO pipeline status — a candidate
+/// may pursue several vacancies at once, so stage lives on Application (spec 3.8).
+/// This is what prevents duplicate candidate records.
+/// `skillsJson`, `certificationsJson`: JSON arrays of strings.
+model Candidate {
+  id                   String    @id @default(cuid())
+  schoolId             String
+  firstName            String
+  lastName             String?
+  email                String?
+  phone                String?
+  photoFileId          String?
+  resumeFileId         String?
+  address              String?
+  city                 String?
+  state                String?
+  country              String?
+  pinCode              String?
+  currentOrganization  String?
+  currentDesignation   String?
+  totalExperienceYears Float?
+  noticePeriodDays     Int?
+  currentSalary        Float?
+  expectedSalary       Float?
+  highestQualification String?
+  university           String?
+  passingYear          Int?
+  skillsJson           String?
+  certificationsJson   String?
+  source               String?
+  recruiterId          String?
+  convertedStaffId     String?
+  isBlacklisted        Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  school          School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  convertedStaff  Staff?              @relation("CandidateToStaff", fields: [convertedStaffId], references: [id])
+  applications    Application[]
+  documents       CandidateDocument[]
+
+  @@index([schoolId])
+  @@index([schoolId, email])
+}
+
+/// One candidate pursuing one vacancy — the pipeline row. `status` is the stage.
+/// Selection fields are filled at the SELECTED stage and are what
+/// candidate→employee conversion reads, so the conversion never invents data.
+///
+/// `status`: new | screening | shortlisted | interview | selected | offered | joined | rejected | withdrawn | hold
+model Application {
+  id                    String    @id @default(cuid())
+  schoolId              String
+  candidateId           String
+  vacancyId             String
+  appliedDate           DateTime  @default(now())
+  source                String?
+  status                String    @default("new")
+  recruiterId           String?
+  notes                 String?
+  screeningScore        Float?
+  screeningComments     String?
+  screenedAt            DateTime?
+  screenedById          String?
+  rejectionReason       String?
+  proposedDesignationId String?
+  proposedDepartmentId  String?
+  proposedCampusId      String?
+  proposedSalary        Float?
+  proposedJoiningDate   DateTime?
+  proposedManagerId     String?
+  selectedAt            DateTime?
+  selectedById          String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  school        School                     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  candidate     Candidate                  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  vacancy       Vacancy                    @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  interviews    Interview[]
+  offers        Offer[]
+  demoClasses   DemoClass[]
+  statusHistory ApplicationStatusHistory[]
+
+  @@unique([candidateId, vacancyId])
+  @@index([schoolId, status])
+  @@index([vacancyId, status])
+}
+
+/// Append-only stage history for an application — the candidate activity timeline.
+model ApplicationStatusHistory {
+  id            String   @id @default(cuid())
+  applicationId String
+  fromStatus    String?
+  toStatus      String
+  note          String?
+  actorId       String?
+  occurredAt    DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, occurredAt])
+}
+
+/// `mode`: in_person | video | phone
+/// `status`: scheduled | completed | cancelled | no_show
+/// `outcome`: strong_hire | hire | hold | reject
+model Interview {
+  id              String    @id @default(cuid())
+  schoolId        String
+  applicationId   String
+  roundNumber     Int       @default(1)
+  roundName       String?
+  scheduledAt     DateTime
+  durationMinutes Int?
+  mode            String    @default("in_person")
+  location        String?
+  meetingLink     String?
+  status          String    @default("scheduled")
+  outcome         String?
+  overallScore    Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  school      School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  application Application            @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  panel       InterviewPanelMember[]
+  evaluations InterviewEvaluation[]
+
+  @@index([schoolId, scheduledAt])
+  @@index([applicationId, roundNumber])
+}
+
+/// `panelRole`: hr | hod | principal | subject_expert | other
+model InterviewPanelMember {
+  id          String @id @default(cuid())
+  interviewId String
+  staffId     String
+  panelRole   String?
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  staff     Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewId, staffId])
+}
+
+/// One panel member's scorecard. `scoresJson` is a JSON object of
+/// { criterionKey: rating } so schools can configure their own criteria without a
+/// migration; `recommendation` is the human call — scores never auto-decide.
+/// `recommendation`: strong_hire | hire | hold | reject
+model InterviewEvaluation {
+  id               String   @id @default(cuid())
+  interviewId      String
+  evaluatorStaffId String
+  scoresJson       String?
+  overallScore     Float?
+  recommendation   String?
+  comments         String?
+  submittedAt      DateTime @default(now())
+
+  interview Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  evaluator Staff     @relation("Evaluator", fields: [evaluatorStaffId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewId, evaluatorStaffId])
+}
+
+/// Teacher-specific recruitment step: a demo lesson, scored separately from the
+/// interview rounds because it evaluates classroom practice rather than an interview.
+/// `status`: scheduled | completed | cancelled
+model DemoClass {
+  id                       String    @id @default(cuid())
+  schoolId                 String
+  applicationId            String
+  scheduledAt              DateTime?
+  subject                  String?
+  gradeLevel               String?
+  topic                    String?
+  evaluatorStaffId         String?
+  teachingScore            Float?
+  classroomManagementScore Float?
+  studentInteractionScore  Float?
+  overallScore             Float?
+  feedback                 String?
+  status                   String    @default("scheduled")
+  createdAt                DateTime  @default(now())
+
+  school      School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, scheduledAt])
+}
+
+/// `status`: draft | sent | accepted | rejected | expired | withdrawn
+model Offer {
+  id                 String    @id @default(cuid())
+  schoolId           String
+  applicationId      String
+  code               String?
+  designationId      String?
+  departmentId       String?
+  campusId           String?
+  employeeTypeId     String?
+  salaryAmount       Float?
+  joiningDate        DateTime?
+  workLocation       String?
+  reportingManagerId String?
+  expiryDate         DateTime?
+  termsText          String?
+  pdfFileId          String?
+  status             String    @default("draft")
+  sentAt             DateTime?
+  respondedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  school      School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
+}
+
+/// `documentType`: resume | certificate | portfolio | id_proof | other
+model CandidateDocument {
+  id             String   @id @default(cuid())
+  schoolId       String
+  candidateId    String
+  documentType   String
+  title          String?
+  uploadedFileId String
+  createdAt      DateTime @default(now())
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  candidate    Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  uploadedFile UploadedFile @relation(fields: [uploadedFileId], references: [id])
+
+  @@index([candidateId, documentType])
 }
 
 // ---------------------------------------------------------------------------
@@ -863,10 +1268,11 @@ model UploadedFile {
   uploadedById    String?
   createdAt       DateTime @default(now())
 
-  school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  staffDocuments   StaffDocument[]
-  staffEducations  StaffEducation[]
-  staffExperiences StaffExperience[]
+  school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staffDocuments     StaffDocument[]
+  staffEducations    StaffEducation[]
+  staffExperiences   StaffExperience[]
+  candidateDocuments CandidateDocument[]
 
   @@index([schoolId, kind])
 }

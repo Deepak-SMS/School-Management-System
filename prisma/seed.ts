@@ -132,17 +132,49 @@ async function main() {
     }
   }
 
+  // A real acting user, so audit entries and the activity timeline record who did
+  // what instead of falling back to "System" (see src/lib/current-user.ts).
+  const demoUser = await prisma.user.upsert({
+    where: { email: "hr@greenfieldschool.example" },
+    update: {},
+    create: { name: "Aditi Rao", email: "hr@greenfieldschool.example", isActive: true },
+  });
+  await prisma.schoolMembership.upsert({
+    where: { userId_schoolId: { userId: demoUser.id, schoolId: school.id } },
+    update: { role: "hr" },
+    create: { userId: demoUser.id, schoolId: school.id, role: "hr" },
+  });
+
+  const employeeTypeSeed = [
+    { name: "Permanent", code: "PERMANENT", isPaid: true, sortOrder: 0 },
+    { name: "Contract", code: "CONTRACT", isPaid: true, sortOrder: 1 },
+    { name: "Part-time", code: "PART_TIME", isPaid: true, sortOrder: 2 },
+    { name: "Visiting Faculty", code: "VISITING", isPaid: true, sortOrder: 3 },
+    { name: "Intern", code: "INTERN", isPaid: false, sortOrder: 4 },
+  ];
+  const employeeTypeIds = new Map<string, string>();
+  for (const type of employeeTypeSeed) {
+    const row = await prisma.employeeType.upsert({
+      where: { schoolId_code: { schoolId: school.id, code: type.code } },
+      update: {},
+      create: { schoolId: school.id, ...type },
+    });
+    employeeTypeIds.set(type.code, row.id);
+  }
+
+  // Statuses and types are varied deliberately so the HR dashboard's breakdowns
+  // and alerts have something real to show on a fresh database.
   const teacherSeed = [
-    { name: "Meera Kulkarni", designation: "Mathematics Teacher", dept: "Academics" },
-    { name: "Rakesh Iyer", designation: "Science Teacher", dept: "Academics" },
-    { name: "Sunita Desai", designation: "English Teacher", dept: "Academics" },
+    { first: "Meera", last: "Kulkarni", designation: "Mathematics Teacher", dept: "Academics", type: "PERMANENT", status: "active", gender: "female" },
+    { first: "Rakesh", last: "Iyer", designation: "Science Teacher", dept: "Academics", type: "PERMANENT", status: "active", gender: "male" },
+    { first: "Sunita", last: "Desai", designation: "English Teacher", dept: "Academics", type: "CONTRACT", status: "probation", gender: "female" },
   ];
   const staffSeed = [
-    { name: "Vikram Rao", designation: "Principal", category: "principal", dept: "Administration" },
-    { name: "Anjali Bhatt", designation: "Accountant", category: "accountant", dept: "Finance" },
-    { name: "Suresh Pillai", designation: "Librarian", category: "librarian", dept: "Library" },
-    { name: "Ramesh Chawla", designation: "Bus Driver", category: "driver", dept: "Transport" },
-    { name: "Farida Sheikh", designation: "Front Office Executive", category: "admin_staff", dept: "Administration" },
+    { first: "Vikram", last: "Rao", designation: "Principal", category: "principal", dept: "Administration", type: "PERMANENT", status: "active", gender: "male" },
+    { first: "Anjali", last: "Bhatt", designation: "Accountant", category: "accountant", dept: "Finance", type: "PERMANENT", status: "active", gender: "female" },
+    { first: "Suresh", last: "Pillai", designation: "Librarian", category: "librarian", dept: "Library", type: "PERMANENT", status: "on_leave", gender: "male" },
+    { first: "Ramesh", last: "Chawla", designation: "Bus Driver", category: "driver", dept: "Transport", type: "CONTRACT", status: "active", gender: "male" },
+    { first: "Farida", last: "Sheikh", designation: "Front Office Executive", category: "admin_staff", dept: "Administration", type: "PART_TIME", status: "notice_period", gender: "female" },
   ];
 
   const departmentIds = new Map<string, string>();
@@ -174,33 +206,48 @@ async function main() {
   const existingStaff = await prisma.staff.count({ where: { schoolId: school.id } });
   if (existingStaff === 0) {
     let seq = 1;
+    const today = new Date();
+
     for (const t of teacherSeed) {
       await prisma.staff.create({
         data: {
           schoolId: school.id,
-          employeeId: `EMP${String(seq++).padStart(3, "0")}`,
-          fullName: t.name,
+          employeeId: `EMP-${String(seq++).padStart(6, "0")}`,
+          fullName: `${t.first} ${t.last}`,
+          firstName: t.first,
+          lastName: t.last,
+          gender: t.gender,
           designationId: await designationId(t.designation),
           departmentId: await departmentId(t.dept),
+          employeeTypeId: employeeTypeIds.get(t.type),
           category: "teacher",
           mobileNumber: `+91 90${String(2000000 + seq * 91).slice(0, 8)}`,
+          // Spread birthdays across the coming weeks so the dashboard's
+          // "upcoming" panel isn't empty on a fresh install.
+          dateOfBirth: new Date(1988, today.getMonth(), Math.min(28, today.getDate() + seq * 3)),
           joiningDate: new Date(2019, seq % 12, 1),
-          employmentStatus: "active",
+          employmentStatus: t.status,
         },
       });
     }
+
     for (const s of staffSeed) {
       await prisma.staff.create({
         data: {
           schoolId: school.id,
-          employeeId: `EMP${String(seq++).padStart(3, "0")}`,
-          fullName: s.name,
+          employeeId: `EMP-${String(seq++).padStart(6, "0")}`,
+          fullName: `${s.first} ${s.last}`,
+          firstName: s.first,
+          lastName: s.last,
+          gender: s.gender,
           designationId: await designationId(s.designation),
           departmentId: await departmentId(s.dept),
+          employeeTypeId: employeeTypeIds.get(s.type),
           category: s.category,
           mobileNumber: `+91 90${String(2000000 + seq * 91).slice(0, 8)}`,
-          joiningDate: new Date(2018, seq % 12, 1),
-          employmentStatus: "active",
+          dateOfBirth: new Date(1985, today.getMonth(), Math.min(28, today.getDate() + seq * 2)),
+          joiningDate: new Date(2018, today.getMonth(), 1),
+          employmentStatus: s.status,
         },
       });
     }

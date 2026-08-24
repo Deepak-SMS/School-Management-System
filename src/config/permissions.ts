@@ -1,7 +1,7 @@
 import type { Role } from "@/types/user";
 import type { PermissionAction, PermissionModule } from "@/types/permissions";
 
-const ALL_MODULES: PermissionModule[] = [
+const SCHOOL_MODULES: PermissionModule[] = [
   "schoolProfile",
   "campuses",
   "academicYears",
@@ -11,28 +11,119 @@ const ALL_MODULES: PermissionModule[] = [
   "departments",
 ];
 
+/** HR modules excluding salary — salary is granted separately and deliberately. */
+const HR_PEOPLE_MODULES: PermissionModule[] = [
+  "hrDashboard",
+  "employees",
+  "employeeDocuments",
+  "designations",
+  "employeeTypes",
+  "employeeAttendance",
+  "employeePerformance",
+];
+
+const RECRUITMENT_MODULES: PermissionModule[] = ["recruitment", "vacancies", "candidates", "interviews", "offers"];
+
+const ALL_MODULES: PermissionModule[] = [
+  ...SCHOOL_MODULES,
+  ...HR_PEOPLE_MODULES,
+  ...RECRUITMENT_MODULES,
+  "employeeSalary",
+];
+
+const EVERY_ACTION: PermissionAction[] = [
+  "view",
+  "create",
+  "edit",
+  "delete",
+  "export",
+  "import",
+  "activate",
+  "deactivate",
+  "approve",
+  "transfer",
+  "verify",
+  "screen",
+  "evaluate",
+  "select",
+  "convert",
+];
+
 const FULL_ACCESS: PermissionAction[] = ["view", "create", "edit", "delete", "export", "activate", "deactivate"];
 const VIEW_EXPORT_EDIT: PermissionAction[] = ["view", "create", "edit", "export", "activate", "deactivate"];
 const VIEW_EXPORT: PermissionAction[] = ["view", "export"];
 const VIEW_ONLY: PermissionAction[] = ["view"];
 
-function grant(modules: PermissionModule[], actions: PermissionAction[]): Partial<Record<PermissionModule, PermissionAction[]>> {
+function grant(
+  modules: PermissionModule[],
+  actions: PermissionAction[],
+): Partial<Record<PermissionModule, PermissionAction[]>> {
   return Object.fromEntries(modules.map((m) => [m, actions]));
 }
 
 /**
- * Static permission matrix for the School Management modules. There is no auth/session yet
- * (see src/lib/tenant.ts), so this is not server-enforced — it drives client-side UI gating
- * (show/hide Add/Edit/Delete/Export buttons) via useCurrentUser()'s mock role today, and is
- * ready to back real route guards once a session exists.
+ * Role → permission matrix for School Management + HR + Recruitment.
+ *
+ * This is the single source of truth for authorization. It is enforced
+ * server-side by `requirePermission()` (src/lib/authorize.ts) on every mutating
+ * HR route, and reused client-side by `useCan()` to hide controls the user
+ * cannot use. Hiding alone is never the control — the server check is.
+ *
+ * Deliberate separations:
+ * - `employeeSalary` (bank/PAN/salary) is granted only to HR Admin, School
+ *   Admin, Super Admin and Accountant — not to Principal, HR Staff or HOD.
+ * - Recruitment roles get no payroll access (spec §3.18).
+ * - `teacher` holds no HR-wide grants; employees reach their own record through
+ *   Employee Self-Service, which scopes by staff id rather than by role.
  */
 export const ROLE_PERMISSIONS: Record<Role, Partial<Record<PermissionModule, PermissionAction[]>>> = {
-  super_admin: grant(ALL_MODULES, FULL_ACCESS),
-  school_admin: grant(ALL_MODULES, FULL_ACCESS),
-  principal: grant(ALL_MODULES, VIEW_EXPORT_EDIT),
+  super_admin: grant(ALL_MODULES, EVERY_ACTION),
+  school_admin: grant(ALL_MODULES, EVERY_ACTION),
+
+  // HR Admin — full HR management, including sensitive pay data.
+  hr: {
+    ...grant(SCHOOL_MODULES, VIEW_EXPORT),
+    ...grant(HR_PEOPLE_MODULES, EVERY_ACTION),
+    ...grant(RECRUITMENT_MODULES, EVERY_ACTION),
+    employeeSalary: ["view", "create", "edit", "export"],
+  },
+
+  // HR Staff — day-to-day HR operations, but cannot see pay data, delete
+  // employees, or convert a candidate into an employee.
+  hr_staff: {
+    ...grant(SCHOOL_MODULES, VIEW_ONLY),
+    ...grant(HR_PEOPLE_MODULES, ["view", "create", "edit", "export", "verify"]),
+    ...grant(RECRUITMENT_MODULES, ["view", "create", "edit", "export", "screen", "evaluate"]),
+  },
+
+  // Principal — oversight across employees and hiring; no pay data.
+  principal: {
+    ...grant(SCHOOL_MODULES, VIEW_EXPORT_EDIT),
+    ...grant(HR_PEOPLE_MODULES, ["view", "export", "approve"]),
+    ...grant(RECRUITMENT_MODULES, ["view", "export", "evaluate", "select", "approve"]),
+  },
+
+  // HOD — manages their own department's staff. Row-level scoping to that
+  // department is applied in the route on top of this grant.
+  hod: {
+    ...grant(["departments", "classes", "sections", "subjects"], VIEW_ONLY),
+    hrDashboard: ["view"],
+    employees: ["view", "export"],
+    employeeAttendance: ["view", "export", "approve"],
+    employeePerformance: ["view", "create", "edit", "evaluate"],
+    interviews: ["view", "evaluate"],
+    candidates: ["view"],
+    vacancies: ["view"],
+  },
+
+  // Accountant — payroll-facing: pay data plus enough employee context to use it.
+  accountant: {
+    hrDashboard: ["view"],
+    employees: ["view", "export"],
+    employeeSalary: ["view", "export"],
+  },
+
   teacher: grant(["classes", "sections", "subjects", "departments"], VIEW_EXPORT),
-  accountant: {},
-  hr: grant(["departments"], VIEW_ONLY),
   librarian: grant(["departments"], VIEW_ONLY),
   transport_manager: grant(["departments"], VIEW_ONLY),
   hostel_manager: grant(["departments"], VIEW_ONLY),
@@ -42,4 +133,9 @@ export const ROLE_PERMISSIONS: Record<Role, Partial<Record<PermissionModule, Per
 
 export function hasPermission(role: Role, module: PermissionModule, action: PermissionAction): boolean {
   return ROLE_PERMISSIONS[role]?.[module]?.includes(action) ?? false;
+}
+
+/** True if the role can see salary/bank/PAN fields — the one check worth naming. */
+export function canViewSensitivePay(role: Role): boolean {
+  return hasPermission(role, "employeeSalary", "view");
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { designationInputSchema, DESIGNATION_DEFAULTS } from "@/lib/validation/designation";
+import { employeeTypeInputSchema, EMPLOYEE_TYPE_DEFAULTS } from "@/lib/validation/employeeType";
 import { cleanEmptyStrings } from "@/lib/validation/shared";
 import { requirePermission } from "@/lib/authorize";
 import { recordAudit } from "@/lib/audit";
@@ -9,29 +9,28 @@ import type { Prisma } from "@/generated/prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
-    const { schoolId } = await requirePermission("designations", "view");
+    const { schoolId } = await requirePermission("employeeTypes", "view");
     const params = request.nextUrl.searchParams;
     const q = params.get("q")?.trim();
     const status = params.get("status") ?? undefined;
-    const departmentId = params.get("departmentId") ?? undefined;
 
-    const where: Prisma.DesignationWhereInput = {
+    const where: Prisma.EmployeeTypeWhereInput = {
       schoolId,
       ...(status && { status }),
-      ...(departmentId && { departmentId }),
       ...(q && { OR: [{ name: { contains: q } }, { code: { contains: q } }] }),
     };
 
-    const rows = await prisma.designation.findMany({
+    const rows = await prisma.employeeType.findMany({
       where,
-      include: { department: { select: { id: true, name: true } } },
-      orderBy: [{ level: "desc" }, { name: "asc" }],
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
 
+    // Headcount per type, so the settings screen shows what is actually in use
+    // and an admin can see before deactivating one.
     const data = await Promise.all(
       rows.map(async (row) => ({
         ...row,
-        counts: { employees: await prisma.staff.count({ where: { schoolId, designationId: row.id } }) },
+        counts: { employees: await prisma.staff.count({ where: { schoolId, employeeTypeId: row.id } }) },
       })),
     );
 
@@ -43,17 +42,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requirePermission("designations", "create");
+    const user = await requirePermission("employeeTypes", "create");
     const { schoolId } = user;
-    const input = cleanEmptyStrings(designationInputSchema.parse(await request.json()));
+    const input = cleanEmptyStrings(employeeTypeInputSchema.parse(await request.json()));
 
     const created = await prisma.$transaction(async (tx) => {
-      const row = await tx.designation.create({ data: { schoolId, ...DESIGNATION_DEFAULTS, ...input } });
+      const row = await tx.employeeType.create({ data: { schoolId, ...EMPLOYEE_TYPE_DEFAULTS, ...input } });
       await recordAudit(tx, {
         schoolId,
         userId: user.id,
-        action: "designation.create",
-        entityType: "Designation",
+        action: "employeeType.create",
+        entityType: "EmployeeType",
         entityId: row.id,
         after: row,
       });

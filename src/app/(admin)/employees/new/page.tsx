@@ -2,36 +2,52 @@
 
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { StaffForm } from "@/features/staff/staff-form";
-import { staffService } from "@/services/staffService";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { EmployeeForm } from "@/features/hr/employee-form";
+import { employeeService } from "@/services/hrService";
 import { toast } from "@/hooks/use-toast";
 import type { StaffInput } from "@/lib/validation/staff";
 
-function NewStaffForm() {
+function NewEmployeeForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const category = searchParams.get("category") as StaffInput["category"] | null;
 
   async function handleSubmit(input: StaffInput) {
-    const staff = await staffService.create(input);
-    toast({ title: "Staff member added", description: `${staff.fullName} (${staff.employeeId})`, variant: "success" });
-    router.push(category === "teacher" ? "/employees/teachers" : "/employees");
+    const employee = await employeeService.create(input);
+    toast({
+      title: "Employee added",
+      description: `${employee.fullName} (${employee.employeeId})`,
+      variant: "success",
+    });
+    // Straight to the new profile so documents and education can be filed next.
+    router.push(`/employees/${employee.id}`);
   }
 
-  return <StaffForm onSubmit={handleSubmit} defaultValues={category ? { category } : undefined} />;
+  return <EmployeeForm onSubmit={handleSubmit} defaultValues={category ? { category } : undefined} />;
 }
 
-export default function NewStaffPage() {
+export default function NewEmployeePage() {
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-8">
+    <div className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-8">
+      <Link
+        href="/employees"
+        className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" /> Back to employees
+      </Link>
+
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Add staff member</h1>
+        <h1 className="text-xl font-semibold text-foreground">Add employee</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          A verification QR identifier is generated automatically once the record is saved.
+          Education, experience and documents are filed from the profile once the record exists. A verification QR
+          identifier is generated automatically on save.
         </p>
       </div>
+
       <Suspense>
-        <NewStaffForm />
+        <NewEmployeeForm />
       </Suspense>
     </div>
   );

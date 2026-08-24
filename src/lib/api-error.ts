@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { Prisma } from "@/generated/prisma/client";
+import { ForbiddenError } from "@/lib/authorize";
 
 /**
  * Normalizes any thrown error into a clean JSON response — never a raw stack
@@ -13,6 +14,11 @@ export function apiError(error: unknown): NextResponse {
       { error: "Validation failed", fieldErrors: error.flatten().fieldErrors },
       { status: 422 },
     );
+  }
+
+  // Authorization failure — 403, and never leaks which record was being accessed.
+  if (error instanceof ForbiddenError) {
+    return NextResponse.json({ error: error.message, permission: error.permission }, { status: 403 });
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
