@@ -28,53 +28,63 @@ datasource db {
 /// School itself rather than a separate 1:1 table since it's never queried
 /// independently of the tenant record.
 model School {
-  id                    String   @id @default(cuid())
-  name                  String
-  shortName             String
-  address               String?
-  city                  String?
-  state                 String?
-  country               String?
-  pinCode               String?
-  phone                 String?
-  email                 String?
-  website               String?
-  affiliationBoard      String?
-  schoolCode            String?
-  principalName         String?
-  logoUrl               String?
-  bannerUrl             String?
-  principalSignatureUrl String?
-  schoolSealUrl         String?
+  id                     String   @id @default(cuid())
+  name                   String
+  shortName              String
+  address                String?
+  city                   String?
+  state                  String?
+  country                String?
+  pinCode                String?
+  phone                  String?
+  email                  String?
+  website                String?
+  affiliationBoard       String?
+  schoolCode             String?
+  principalName          String?
+  logoUrl                String?
+  bannerUrl              String?
+  principalSignatureUrl  String?
+  schoolSealUrl          String?
   // Profile fields (School Profile module)
-  registrationNumber    String?
-  schoolType            String?
-  institutionType       String?
-  establishedYear       Int?
-  alternatePhone        String?
-  administratorName     String?
-  administrativeEmail   String?
-  administrativePhone   String?
-  timeZone              String?
-  currency              String?
-  dateFormat            String?
-  language              String?
-  weekStartDay          String?
+  // Government & Board IDs — Indian school compliance identifiers.
+  udisePlusCode          String?
+  udiseSchoolId          String?
+  boardAffiliationNumber String?
+  recognitionNumber      String?
+  rteRegistrationNumber  String?
+  nocNumber              String?
+  registrationNumber     String?
+  schoolType             String?
+  institutionType        String?
+  establishedYear        Int?
+  alternatePhone         String?
+  administratorName      String?
+  administrativeEmail    String?
+  administrativePhone    String?
+  timeZone               String?
+  currency               String?
+  dateFormat             String?
+  language               String?
+  weekStartDay           String?
   /// JSON array of weekday strings, e.g. ["monday",...,"friday"] — SQLite has no array type.
-  workingDaysJson       String?
-  facebookUrl           String?
-  instagramUrl          String?
-  youtubeUrl            String?
-  linkedinUrl           String?
-  twitterUrl            String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  workingDaysJson        String?
+  facebookUrl            String?
+  instagramUrl           String?
+  youtubeUrl             String?
+  linkedinUrl            String?
+  twitterUrl             String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   memberships          SchoolMembership[]
   academicYears        AcademicYear[]
   classes              Class[]
   sections             Section[]
   students             Student[]
+  guardians            Guardian[]
+  registrationForms    RegistrationForm[]
+  studentRegistrations StudentRegistration[]
   staff                Staff[]
   campuses             Campus[]
   subjects             Subject[]
@@ -108,15 +118,33 @@ model School {
 /// this exists so every other model can reference "who did this" honestly
 /// instead of a fake string.
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  name               String
+  email              String   @unique
+  passwordHash       String?
+  isActive           Boolean  @default(true)
+  /// Set on account creation/reset so the first login forces a password change.
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   memberships SchoolMembership[]
+  sessions    Session[]
+}
+
+/// Server-side login session. The cookie carries a random token; only its
+/// SHA-256 hash is stored here, so a database read alone can't be replayed as
+/// a valid session cookie. See src/lib/session.ts.
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 /// A user can belong to more than one school (matches the multi-tenant
@@ -366,41 +394,87 @@ model Designation {
 // ---------------------------------------------------------------------------
 
 /// `status`: active | inactive | graduated | transferred | suspended
+/// `status`: active | inactive | transferred | graduated | withdrawn
+/// `admissionType`: new | transfer | readmission | staff_ward | rte
+/// `category`, `religion` and `govtIdRef` are optional and collected only where a
+/// school is legally required to (RTE quota reporting, board submissions). They
+/// are never required to save a student, and are permission-gated on read.
+///
+/// `address` is address line 1; `addressLine2` extends it. Guardians live in
+/// their own table (see Guardian/StudentGuardian) rather than as text on the
+/// student, so siblings share one parent record.
 model Student {
-  id               String    @id @default(cuid())
-  schoolId         String
-  admissionNumber  String
-  firstName        String
-  middleName       String?
-  lastName         String
-  photoUrl         String?
-  dateOfBirth      DateTime?
-  gender           String?
-  bloodGroup       String?
-  academicYearId   String
-  classId          String
-  sectionId        String?
-  rollNumber       String?
-  house            String?
-  status           String    @default("active")
-  guardianName     String?
-  guardianPhone    String?
-  emergencyContact String?
-  address          String?
-  city             String?
-  state            String?
-  country          String?
-  pinCode          String?
-  busNumber        String?
-  route            String?
-  pickupPoint      String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  schoolId          String
+  admissionNumber   String
+  enrollmentNumber  String?
+  firstName         String
+  middleName        String?
+  lastName          String
+  photoUrl          String?
+  photoFileId       String?
+  dateOfBirth       DateTime?
+  gender            String?
+  bloodGroup        String?
+  nationality       String?
+  motherTongue      String?
+  religion          String?
+  category          String?
+  govtIdRef         String?
+  academicYearId    String
+  classId           String
+  sectionId         String?
+  rollNumber        String?
+  house             String?
+  status            String    @default("active")
+  // Admission
+  previousSchool    String?
+  admissionDate     DateTime?
+  admissionType     String?
+  admissionClassId  String?
+  // Current address (line 1 is `address`)
+  address           String?
+  addressLine2      String?
+  city              String?
+  state             String?
+  country           String?
+  pinCode           String?
+  // Permanent address
+  sameAsCurrent     Boolean   @default(true)
+  permanentAddress  String?
+  permanentLine2    String?
+  permanentCity     String?
+  permanentState    String?
+  permanentCountry  String?
+  permanentPinCode  String?
+  // Contact
+  primaryMobile     String?
+  secondaryMobile   String?
+  studentEmail      String?
+  parentEmail       String?
+  whatsappNumber    String?
+  /// JSON array of enabled channels, e.g. ["whatsapp","sms","email"] — SQLite has no array type.
+  commChannelsJson  String?
+  preferredChannel  String?
+  // Emergency
+  emergencyName     String?
+  emergencyRelation String?
+  emergencyContact  String?
+  emergencyAltPhone String?
+  emergencyAddress  String?
+  // Transport
+  busNumber         String?
+  route             String?
+  pickupPoint       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   school          School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   academicYear    AcademicYear           @relation(fields: [academicYearId], references: [id])
   class           Class                  @relation(fields: [classId], references: [id])
   section         Section?               @relation(fields: [sectionId], references: [id])
+  guardians       StudentGuardian[]
+  registration    StudentRegistration?
   idCards         IDCard[]
   qrVerification  QRVerification?
   generationItems IDCardGenerationItem[]
@@ -409,6 +483,124 @@ model Student {
   @@unique([schoolId, admissionNumber])
   @@index([schoolId, classId, sectionId])
   @@index([schoolId, status])
+}
+
+/// A parent or guardian as a person in their own right, so siblings link to the
+/// same record instead of duplicating a name and phone number on every child.
+/// Matching on mobile/email is what lets the importer reuse an existing parent.
+model Guardian {
+  id              String   @id @default(cuid())
+  schoolId        String
+  firstName       String
+  lastName        String?
+  fullName        String
+  mobile          String?
+  alternateMobile String?
+  email           String?
+  occupation      String?
+  organization    String?
+  designation     String?
+  education       String?
+  annualIncome    Float?
+  photoFileId     String?
+  govtIdRef       String?
+  address         String?
+  city            String?
+  state           String?
+  country         String?
+  pinCode         String?
+  /// Set once a portal login exists for this guardian.
+  userId          String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  school   School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  students StudentGuardian[]
+
+  @@index([schoolId])
+  @@index([schoolId, mobile])
+  @@index([schoolId, email])
+}
+
+/// Links a guardian to a student and carries everything that is true of *that
+/// pairing* rather than of the person: which parent they are, whether they're the
+/// primary contact, and what they're permitted to receive or access.
+///
+/// `relationship`: father | mother | guardian | grandparent | sibling | other
+model StudentGuardian {
+  id                   String   @id @default(cuid())
+  studentId            String
+  guardianId           String
+  relationship         String
+  isPrimary            Boolean  @default(false)
+  isEmergencyContact   Boolean  @default(false)
+  isAuthorizedPickup   Boolean  @default(false)
+  isLegalGuardian      Boolean  @default(false)
+  canReceiveAcademic   Boolean  @default(true)
+  canReceiveFee        Boolean  @default(false)
+  canAccessPortal      Boolean  @default(false)
+  sortOrder            Int      @default(0)
+  createdAt            DateTime @default(now())
+
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardian Guardian @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, guardianId])
+  @@index([studentId])
+  @@index([guardianId])
+}
+
+/// A shareable self-service form the school sends to parents. `token` is the
+/// opaque part of the public URL — it is not guessable and can be revoked by
+/// deactivating the form, so a leaked link never becomes permanent access.
+model RegistrationForm {
+  id             String    @id @default(cuid())
+  schoolId       String
+  token          String    @unique
+  title          String
+  description    String?
+  academicYearId String?
+  classId        String?
+  isActive       Boolean   @default(true)
+  expiresAt      DateTime?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  school        School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  submissions   StudentRegistration[]
+
+  @@index([schoolId, isActive])
+}
+
+/// One parent-submitted form. Deliberately NOT a Student: submissions are
+/// untrusted input and land as `pending` until a staff member reviews them, so a
+/// public URL can never write directly into the student roster.
+///
+/// `payloadJson` holds the submitted answers; approving one creates the Student
+/// (and any Guardians) and back-links via `studentId`.
+/// `status`: pending | approved | rejected
+model StudentRegistration {
+  id           String    @id @default(cuid())
+  schoolId     String
+  formId       String
+  payloadJson  String
+  status       String    @default("pending")
+  studentName  String
+  contactPhone String?
+  contactEmail String?
+  reviewNote   String?
+  reviewedById String?
+  reviewedAt   DateTime?
+  studentId    String?   @unique
+  submittedAt  DateTime  @default(now())
+
+  school  School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  form    RegistrationForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  student Student?         @relation(fields: [studentId], references: [id])
+
+  @@index([schoolId, status])
+  @@index([formId])
 }
 
 /// The employee master record — HR treats "employee" and "staff" as the same
@@ -631,7 +823,7 @@ model EmployeeType {
 /// `transferType`: department | campus | designation | manager | location | multiple
 /// `status`: pending | approved | applied | cancelled
 model StaffTransfer {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   schoolId          String
   staffId           String
   transferType      String
@@ -649,8 +841,8 @@ model StaffTransfer {
   effectiveDate     DateTime
   approvedById      String?
   appliedAt         DateTime?
-  status            String   @default("pending")
-  createdAt         DateTime @default(now())
+  status            String    @default("pending")
+  createdAt         DateTime  @default(now())
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   staff  Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
@@ -734,7 +926,7 @@ model Vacancy {
 /// This is what prevents duplicate candidate records.
 /// `skillsJson`, `certificationsJson`: JSON arrays of strings.
 model Candidate {
-  id                   String    @id @default(cuid())
+  id                   String   @id @default(cuid())
   schoolId             String
   firstName            String
   lastName             String?
@@ -761,14 +953,14 @@ model Candidate {
   source               String?
   recruiterId          String?
   convertedStaffId     String?
-  isBlacklisted        Boolean   @default(false)
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  isBlacklisted        Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  school          School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  convertedStaff  Staff?              @relation("CandidateToStaff", fields: [convertedStaffId], references: [id])
-  applications    Application[]
-  documents       CandidateDocument[]
+  school         School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  convertedStaff Staff?              @relation("CandidateToStaff", fields: [convertedStaffId], references: [id])
+  applications   Application[]
+  documents      CandidateDocument[]
 
   @@index([schoolId])
   @@index([schoolId, email])
@@ -837,21 +1029,21 @@ model ApplicationStatusHistory {
 /// `status`: scheduled | completed | cancelled | no_show
 /// `outcome`: strong_hire | hire | hold | reject
 model Interview {
-  id              String    @id @default(cuid())
+  id              String   @id @default(cuid())
   schoolId        String
   applicationId   String
-  roundNumber     Int       @default(1)
+  roundNumber     Int      @default(1)
   roundName       String?
   scheduledAt     DateTime
   durationMinutes Int?
-  mode            String    @default("in_person")
+  mode            String   @default("in_person")
   location        String?
   meetingLink     String?
-  status          String    @default("scheduled")
+  status          String   @default("scheduled")
   outcome         String?
   overallScore    Float?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   school      School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   application Application            @relation(fields: [applicationId], references: [id], onDelete: Cascade)
@@ -864,7 +1056,7 @@ model Interview {
 
 /// `panelRole`: hr | hod | principal | subject_expert | other
 model InterviewPanelMember {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   interviewId String
   staffId     String
   panelRole   String?

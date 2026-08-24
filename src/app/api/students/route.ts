@@ -68,8 +68,27 @@ export async function POST(request: NextRequest) {
           rollNumber: input.rollNumber,
           house: input.house,
           status: input.status,
-          guardianName: input.guardianName,
-          guardianPhone: input.guardianPhone,
+          // The simple form still submits a single guardian name/phone; store it
+          // as a real Guardian record rather than as text on the student, so it
+          // can be shared with siblings and extended later.
+          ...(input.guardianName?.trim() && {
+            guardians: {
+              create: {
+                relationship: "guardian",
+                isPrimary: true,
+                isEmergencyContact: true,
+                guardian: {
+                  create: {
+                    schoolId,
+                    firstName: input.guardianName.trim().split(" ")[0],
+                    lastName: input.guardianName.trim().split(" ").slice(1).join(" ") || null,
+                    fullName: input.guardianName.trim(),
+                    mobile: input.guardianPhone?.trim() || null,
+                  },
+                },
+              },
+            },
+          }),
           emergencyContact: input.emergencyContact,
           address: input.address,
           city: input.city,

@@ -123,8 +123,30 @@ async function main() {
           rollNumber: String(i + 1),
           house: pick(HOUSES, i),
           status: "active",
-          guardianName: `${pick(LAST_NAMES, i + 7)} ${i % 2 === 0 ? "Mr." : "Mrs."}`,
-          guardianPhone: `+91 98${String(1000000 + i * 137).slice(0, 8)}`,
+          // Guardians are their own records now, created just below so siblings
+          // could share one — see the Guardian/StudentGuardian models.
+          guardians: {
+            create: {
+              relationship: i % 2 === 0 ? "father" : "mother",
+              isPrimary: true,
+              isEmergencyContact: true,
+              isAuthorizedPickup: true,
+              canReceiveAcademic: true,
+              canReceiveFee: true,
+              guardian: {
+                create: {
+                  schoolId: school.id,
+                  firstName: pick(LAST_NAMES, i + 7),
+                  lastName,
+                  fullName: `${pick(LAST_NAMES, i + 7)} ${lastName}`,
+                  mobile: `+91 98${String(1000000 + i * 137).slice(0, 8)}`,
+                  city: "Pune",
+                  state: "Maharashtra",
+                  country: "India",
+                },
+              },
+            },
+          },
           city: "Pune",
           state: "Maharashtra",
           country: "India",
