@@ -1,5 +1,6 @@
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { hashPassword } from "../src/lib/password";
 
 const adapter = new PrismaBetterSqlite3({ url: process.env.DATABASE_URL ?? "file:./dev.db" });
 const prisma = new PrismaClient({ adapter });
@@ -132,18 +133,43 @@ async function main() {
     }
   }
 
-  // A real acting user, so audit entries and the activity timeline record who did
-  // what instead of falling back to "System" (see src/lib/current-user.ts).
-  const demoUser = await prisma.user.upsert({
-    where: { email: "hr@greenfieldschool.example" },
-    update: {},
-    create: { name: "Aditi Rao", email: "hr@greenfieldschool.example", isActive: true },
-  });
-  await prisma.schoolMembership.upsert({
-    where: { userId_schoolId: { userId: demoUser.id, schoolId: school.id } },
-    update: { role: "hr" },
-    create: { userId: demoUser.id, schoolId: school.id, role: "hr" },
-  });
+  // Real acting users, so audit entries and the activity timeline record who did
+  // what instead of falling back to "System" (see src/lib/current-user.ts), and
+  // so there are working logins for local dev now that Phase 3 auth is real.
+  //
+  // One account per role, because the permission matrix
+  // (src/config/permissions.ts) is enforced server-side: the only way to
+  // exercise what a Principal or Teacher can actually see is to sign in as one.
+  //
+  // LOCAL DEMO CREDENTIALS ONLY — this password is committed in plain text.
+  // Production must seed accounts separately and force a password change.
+  const DEMO_PASSWORD = "Password123!";
+  const demoAccounts = [
+    { email: "admin@greenfieldschool.example", name: "Priya Deshmukh", role: "school_admin" },
+    { email: "hr@greenfieldschool.example", name: "Aditi Rao", role: "hr" },
+    { email: "hrstaff@greenfieldschool.example", name: "Nikhil Joshi", role: "hr_staff" },
+    { email: "principal@greenfieldschool.example", name: "Vikram Rao", role: "principal" },
+    { email: "accountant@greenfieldschool.example", name: "Anjali Bhatt", role: "accountant" },
+    { email: "teacher@greenfieldschool.example", name: "Meera Kulkarni", role: "teacher" },
+  ];
+
+  for (const account of demoAccounts) {
+    const user = await prisma.user.upsert({
+      where: { email: account.email },
+      update: { passwordHash: hashPassword(DEMO_PASSWORD) },
+      create: {
+        name: account.name,
+        email: account.email,
+        isActive: true,
+        passwordHash: hashPassword(DEMO_PASSWORD),
+      },
+    });
+    await prisma.schoolMembership.upsert({
+      where: { userId_schoolId: { userId: user.id, schoolId: school.id } },
+      update: { role: account.role },
+      create: { userId: user.id, schoolId: school.id, role: account.role },
+    });
+  }
 
   const employeeTypeSeed = [
     { name: "Permanent", code: "PERMANENT", isPaid: true, sortOrder: 0 },
@@ -256,6 +282,10 @@ async function main() {
   await seedSystemTemplates();
 
   console.log(`Seeded ${school.name}: ${classes.length} classes, 20 students, 8 staff (3 teachers + 5 staff).`);
+  console.log(`\nDemo logins (password for all: ${DEMO_PASSWORD}):`);
+  for (const account of demoAccounts) {
+    console.log(`  ${account.role.padEnd(13)} ${account.email}`);
+  }
 }
 
 interface ElementSeed {
