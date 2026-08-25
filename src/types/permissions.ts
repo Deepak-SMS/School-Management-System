@@ -19,6 +19,11 @@ export type PermissionModule =
   | "sections"
   | "subjects"
   | "departments"
+  // Students
+  | "students"
+  | "guardians"
+  /** Parent-submitted admission forms awaiting review. */
+  | "studentRegistrations"
   // HR — people
   | "hrDashboard"
   | "employees"

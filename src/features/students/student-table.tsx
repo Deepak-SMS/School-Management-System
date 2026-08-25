@@ -17,6 +17,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { TableSkeleton } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { StudentToolbar } from "@/features/students/student-toolbar";
 
 const statusVariant: Record<string, "success" | "neutral" | "warning" | "danger"> = {
   active: "success",
@@ -109,11 +110,10 @@ export function StudentTable() {
             ))}
           </SelectContent>
         </Select>
-        <Button asChild className="ml-auto">
-          <Link href="/students/new">
-            <Plus className="size-4" /> Add student
-          </Link>
-        </Button>
+        {/* Add / Import / Template / Parent form — see StudentToolbar. */}
+        <div className="ml-auto">
+          <StudentToolbar onImported={() => setPage(1)} />
+        </div>
       </div>
 
       {loading && <TableSkeleton rows={8} columns={7} />}

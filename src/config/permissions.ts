@@ -24,8 +24,12 @@ const HR_PEOPLE_MODULES: PermissionModule[] = [
 
 const RECRUITMENT_MODULES: PermissionModule[] = ["recruitment", "vacancies", "candidates", "interviews", "offers"];
 
+/** Student records, their guardians, and parent-submitted admission forms. */
+const STUDENT_MODULES: PermissionModule[] = ["students", "guardians", "studentRegistrations"];
+
 const ALL_MODULES: PermissionModule[] = [
   ...SCHOOL_MODULES,
+  ...STUDENT_MODULES,
   ...HR_PEOPLE_MODULES,
   ...RECRUITMENT_MODULES,
   "employeeSalary",
@@ -79,9 +83,11 @@ export const ROLE_PERMISSIONS: Record<Role, Partial<Record<PermissionModule, Per
   super_admin: grant(ALL_MODULES, EVERY_ACTION),
   school_admin: grant(ALL_MODULES, EVERY_ACTION),
 
-  // HR Admin — full HR management, including sensitive pay data.
+  // HR Admin — full HR management, including sensitive pay data. Student records
+  // are not HR's to edit, so they get read access only.
   hr: {
     ...grant(SCHOOL_MODULES, VIEW_EXPORT),
+    ...grant(STUDENT_MODULES, VIEW_EXPORT),
     ...grant(HR_PEOPLE_MODULES, EVERY_ACTION),
     ...grant(RECRUITMENT_MODULES, EVERY_ACTION),
     employeeSalary: ["view", "create", "edit", "export"],
@@ -91,13 +97,16 @@ export const ROLE_PERMISSIONS: Record<Role, Partial<Record<PermissionModule, Per
   // employees, or convert a candidate into an employee.
   hr_staff: {
     ...grant(SCHOOL_MODULES, VIEW_ONLY),
+    ...grant(STUDENT_MODULES, VIEW_ONLY),
     ...grant(HR_PEOPLE_MODULES, ["view", "create", "edit", "export", "verify"]),
     ...grant(RECRUITMENT_MODULES, ["view", "create", "edit", "export", "screen", "evaluate"]),
   },
 
-  // Principal — oversight across employees and hiring; no pay data.
+  // Principal — oversight across students, employees and hiring; no pay data.
+  // Can approve parent-submitted admissions but not bulk-import or delete.
   principal: {
     ...grant(SCHOOL_MODULES, VIEW_EXPORT_EDIT),
+    ...grant(STUDENT_MODULES, ["view", "create", "edit", "export", "approve"]),
     ...grant(HR_PEOPLE_MODULES, ["view", "export", "approve"]),
     ...grant(RECRUITMENT_MODULES, ["view", "export", "evaluate", "select", "approve"]),
   },
@@ -122,7 +131,12 @@ export const ROLE_PERMISSIONS: Record<Role, Partial<Record<PermissionModule, Per
     employeeSalary: ["view", "export"],
   },
 
-  teacher: grant(["classes", "sections", "subjects", "departments"], VIEW_EXPORT),
+  // Teachers see the students they teach, but never edit the roster or the
+  // guardian contact details behind it.
+  teacher: {
+    ...grant(["classes", "sections", "subjects", "departments"], VIEW_EXPORT),
+    students: ["view", "export"],
+  },
   librarian: grant(["departments"], VIEW_ONLY),
   transport_manager: grant(["departments"], VIEW_ONLY),
   hostel_manager: grant(["departments"], VIEW_ONLY),
