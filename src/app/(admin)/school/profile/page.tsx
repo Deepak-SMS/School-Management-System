@@ -12,6 +12,7 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { toast } from "@/hooks/use-toast";
 import { SchoolProfileForm } from "@/features/school-profile/school-profile-form";
+import { SchoolDocumentsCard } from "@/features/school-profile/school-documents-card";
 
 const COMPLETION_FIELDS: (keyof SchoolProfileRecord)[] = [
   "name",
@@ -34,6 +35,9 @@ const COMPLETION_FIELDS: (keyof SchoolProfileRecord)[] = [
   "dateFormat",
   "logoUrl",
   "bannerUrl",
+  "udisePlusCode",
+  "udiseSchoolId",
+  "recognitionNumber",
 ];
 
 export default function SchoolProfilePage() {
@@ -300,6 +304,24 @@ export default function SchoolProfilePage() {
           <Field label="Established year" value={profile.establishedYear?.toString()} />
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Government &amp; Board IDs</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+          <Field label="UDISE+ Code" value={profile.udisePlusCode} />
+          <Field label="UDISE School ID" value={profile.udiseSchoolId} />
+          <Field label="Recognition Number" value={profile.recognitionNumber} />
+          <Field label="Board Affiliation Number" value={profile.boardAffiliationNumber} />
+          <Field label="School Code" value={profile.schoolCode} />
+          <Field label="RTE Recognition / Registration No." value={profile.rteRegistrationNumber} />
+          <Field label="NOC Number" value={profile.nocNumber} />
+        </CardContent>
+      </Card>
+
+      {/* The certificates evidencing the numbers above. */}
+      <SchoolDocumentsCard profile={profile} />
 
       <Card>
         <CardHeader>

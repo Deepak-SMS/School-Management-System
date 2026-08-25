@@ -83,6 +83,7 @@ model School {
   sections             Section[]
   students             Student[]
   guardians            Guardian[]
+  schoolDocuments      SchoolDocument[]
   registrationForms    RegistrationForm[]
   studentRegistrations StudentRegistration[]
   staff                Staff[]
@@ -793,6 +794,44 @@ model StaffActivityLog {
   @@index([staffId, occurredAt])
 }
 
+/// The certificate backing one of the school's registration numbers — the UDISE
+/// listing, the board affiliation letter, the RTE recognition, the NOC.
+///
+/// Kept separate from the number itself (which lives on School) because a number
+/// is a value while its proof is a file with an issue date, an expiry, and a
+/// verification state. Inspections ask for the document, not the number.
+///
+/// `documentType` mirrors the ID fields on School:
+///   udise_plus_code | udise_school_id | recognition_number |
+///   board_affiliation | school_code | rte_registration | noc | other
+/// `status`: pending | verified | rejected
+model SchoolDocument {
+  id             String    @id @default(cuid())
+  schoolId       String
+  documentType   String
+  title          String?
+  /// The registration number this document evidences, copied at upload time so
+  /// the file still makes sense if the number on School is later corrected.
+  referenceValue String?
+  uploadedFileId String
+  issuedOn       DateTime?
+  expiresOn      DateTime?
+  status         String    @default("pending")
+  version        Int       @default(1)
+  uploadedById   String?
+  verifiedById   String?
+  verifiedAt     DateTime?
+  note           String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  uploadedFile UploadedFile @relation(fields: [uploadedFileId], references: [id])
+
+  @@index([schoolId, documentType])
+  @@index([schoolId, expiresOn])
+}
+
 /// Configurable employment types (Permanent, Contract, Visiting Faculty, Intern...).
 /// A master table rather than a hardcoded constant so each school defines its own
 /// set — `isPaid` lets payroll skip unpaid types without special-casing names.
@@ -1465,6 +1504,7 @@ model UploadedFile {
   staffEducations    StaffEducation[]
   staffExperiences   StaffExperience[]
   candidateDocuments CandidateDocument[]
+  schoolDocuments    SchoolDocument[]
 
   @@index([schoolId, kind])
 }
