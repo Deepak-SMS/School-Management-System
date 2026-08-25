@@ -38,7 +38,6 @@ const adminNavigation: NavSection[] = [
       { label: "Campuses", href: "/school/campuses" },
       { label: "Academic Years", href: "/school/academic-years" },
       { label: "Classes", href: "/school/classes" },
-      { label: "Sections", href: "/school/sections" },
       { label: "Subjects", href: "/school/subjects" },
       { label: "Departments", href: "/school/departments" },
       { label: "Organization", href: "/school/organization" },

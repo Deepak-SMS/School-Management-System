@@ -52,7 +52,8 @@ export default function SectionDetailPage({ params }: { params: Promise<{ id: st
         <Breadcrumb
           items={[
             { label: "School Management", href: "/school/profile" },
-            { label: "Sections", href: "/school/sections" },
+            { label: "Classes", href: "/school/classes" },
+            { label: section.class.name, href: `/school/classes/${section.class.id}` },
             { label: section.name },
           ]}
         />

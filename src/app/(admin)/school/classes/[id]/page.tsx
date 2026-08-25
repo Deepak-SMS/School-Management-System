@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { Layers, Users, BookOpen, UserCog } from "lucide-react";
+import { Layers, Users, BookOpen, UserCog, Plus } from "lucide-react";
 import { classService, type ClassTeacherEntry } from "@/services/classService";
 import { sectionService } from "@/services/sectionService";
 import { subjectService } from "@/services/subjectService";
@@ -93,37 +93,57 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
           {!sections ? (
             <LoadingState className="py-8" />
           ) : sections.length === 0 ? (
-            <EmptyState icon={Layers} title="No sections yet" description="Add sections for this class." />
+            <EmptyState
+              icon={Layers}
+              title="No sections yet"
+              description="Add sections for this class."
+              action={
+                <Button asChild>
+                  <Link href={`/school/sections/new?classId=${id}`}>
+                    <Plus className="size-4" /> Add section
+                  </Link>
+                </Button>
+              }
+            />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Section</TableHead>
-                  <TableHead>Room</TableHead>
-                  <TableHead>Class Teacher</TableHead>
-                  <TableHead>Students</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sections.map((section) => (
-                  <TableRow key={section.id}>
-                    <TableCell className="font-medium">{section.name}</TableCell>
-                    <TableCell>{section.room ?? "—"}</TableCell>
-                    <TableCell>{section.classTeacher?.fullName ?? "—"}</TableCell>
-                    <TableCell>
-                      {section.counts?.students ?? 0}
-                      {section.capacity ? ` / ${section.capacity}` : ""}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href={`/school/sections/${section.id}`}>View</Link>
-                      </Button>
-                    </TableCell>
+            <div className="flex flex-col gap-4">
+              <div className="flex justify-end">
+                <Button asChild size="sm">
+                  <Link href={`/school/sections/new?classId=${id}`}>
+                    <Plus className="size-4" /> Add section
+                  </Link>
+                </Button>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Section</TableHead>
+                    <TableHead>Room</TableHead>
+                    <TableHead>Class Teacher</TableHead>
+                    <TableHead>Students</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {sections.map((section) => (
+                    <TableRow key={section.id}>
+                      <TableCell className="font-medium">{section.name}</TableCell>
+                      <TableCell>{section.room ?? "—"}</TableCell>
+                      <TableCell>{section.classTeacher?.fullName ?? "—"}</TableCell>
+                      <TableCell>
+                        {section.counts?.students ?? 0}
+                        {section.capacity ? ` / ${section.capacity}` : ""}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href={`/school/sections/${section.id}`}>View</Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </TabsContent>
 
