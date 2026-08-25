@@ -16,6 +16,7 @@ export type UploadKind =
   | "student_photo"
   | "staff_photo"
   | "staff_document"
+  | "student_document"
   | "school_document"
   | "candidate_photo"
   | "candidate_resume"
@@ -31,6 +32,7 @@ export const UPLOAD_KINDS: readonly UploadKind[] = [
   "student_photo",
   "staff_photo",
   "staff_document",
+  "student_document",
   "school_document",
   "candidate_photo",
   "candidate_resume",
@@ -48,6 +50,7 @@ export const ALLOWED_MIME_TYPES: Record<UploadKind, readonly string[]> = {
   student_photo: ["image/jpeg", "image/png", "image/webp"],
   staff_photo: ["image/jpeg", "image/png", "image/webp"],
   staff_document: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+  student_document: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
   school_document: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
   candidate_photo: ["image/jpeg", "image/png", "image/webp"],
   candidate_resume: [
@@ -69,6 +72,7 @@ export const MAX_UPLOAD_BYTES: Record<UploadKind, number> = {
   student_photo: 5 * 1024 * 1024,
   staff_photo: 5 * 1024 * 1024,
   staff_document: 15 * 1024 * 1024,
+  student_document: 15 * 1024 * 1024,
   school_document: 20 * 1024 * 1024,
   candidate_photo: 5 * 1024 * 1024,
   candidate_resume: 15 * 1024 * 1024,

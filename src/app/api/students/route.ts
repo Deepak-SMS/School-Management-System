@@ -1,106 +1,108 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentSchoolId } from "@/lib/tenant";
-import { studentInputSchema, cleanEmptyStrings } from "@/lib/validation/student";
+import { requirePermission } from "@/lib/authorize";
+import { studentInputSchema, cleanEmptyStrings, DEFAULT_STUDENT_STATUS } from "@/lib/validation/student";
+import { buildStudentGuardianCreates } from "@/lib/students/guardian-input";
 import { createQrVerification } from "@/lib/qr-verification";
+import { recordAudit } from "@/lib/audit";
 import { apiError } from "@/lib/api-error";
 import type { Prisma } from "@/generated/prisma/client";
 
 export async function GET(request: NextRequest) {
-  const schoolId = await getCurrentSchoolId();
-  const params = request.nextUrl.searchParams;
-  const page = Math.max(1, Number(params.get("page") ?? 1));
-  const pageSize = Math.min(100, Math.max(1, Number(params.get("pageSize") ?? 20)));
-  const q = params.get("q")?.trim();
-  const classId = params.get("classId") ?? undefined;
-  const sectionId = params.get("sectionId") ?? undefined;
-  const status = params.get("status") ?? undefined;
+  try {
+    const { schoolId } = await requirePermission("students", "view");
+    const params = request.nextUrl.searchParams;
+    const page = Math.max(1, Number(params.get("page") ?? 1));
+    const pageSize = Math.min(100, Math.max(1, Number(params.get("pageSize") ?? 20)));
+    const q = params.get("q")?.trim();
+    const classId = params.get("classId") ?? undefined;
+    const sectionId = params.get("sectionId") ?? undefined;
+    const status = params.get("status") ?? undefined;
 
-  const where: Prisma.StudentWhereInput = {
-    schoolId,
-    ...(classId && { classId }),
-    ...(sectionId && { sectionId }),
-    ...(status && { status }),
-    ...(q && {
-      OR: [
-        { firstName: { contains: q } },
-        { lastName: { contains: q } },
-        { admissionNumber: { contains: q } },
-      ],
-    }),
-  };
+    const where: Prisma.StudentWhereInput = {
+      schoolId,
+      ...(classId && { classId }),
+      ...(sectionId && { sectionId }),
+      ...(status && { status }),
+      ...(q && {
+        OR: [
+          { firstName: { contains: q } },
+          { lastName: { contains: q } },
+          { admissionNumber: { contains: q } },
+          { enrollmentNumber: { contains: q } },
+        ],
+      }),
+    };
 
-  const [data, total] = await Promise.all([
-    prisma.student.findMany({
-      where,
-      include: { class: true, section: true, academicYear: true },
-      orderBy: [{ class: { sortOrder: "asc" } }, { rollNumber: "asc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.student.count({ where }),
-  ]);
+    const [data, total] = await Promise.all([
+      prisma.student.findMany({
+        where,
+        include: {
+          class: { select: { id: true, name: true } },
+          section: { select: { id: true, name: true } },
+          academicYear: { select: { id: true, label: true } },
+        },
+        orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.student.count({ where }),
+    ]);
 
-  return NextResponse.json({ data, total, page, pageSize });
+    return NextResponse.json({ data, total, page, pageSize });
+  } catch (error) {
+    return apiError(error);
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const schoolId = await getCurrentSchoolId();
-    const body = await request.json();
-    const input = cleanEmptyStrings(studentInputSchema.parse(body));
+    const user = await requirePermission("students", "create");
+    const { schoolId } = user;
+    const { guardians, ...input } = cleanEmptyStrings(studentInputSchema.parse(await request.json()));
+
+    // Class, section and year must belong to this school, and the section must
+    // belong to the chosen class — otherwise a guessed id could enrol a student
+    // into another tenant's class.
+    const [academicYear, cls] = await Promise.all([
+      prisma.academicYear.findFirst({ where: { id: input.academicYearId, schoolId }, select: { id: true } }),
+      prisma.class.findFirst({ where: { id: input.classId, schoolId }, select: { id: true } }),
+    ]);
+    if (!academicYear) return NextResponse.json({ error: "Academic year not found." }, { status: 404 });
+    if (!cls) return NextResponse.json({ error: "Class not found." }, { status: 404 });
+
+    if (input.sectionId) {
+      const section = await prisma.section.findFirst({
+        where: { id: input.sectionId, schoolId, classId: input.classId },
+        select: { id: true },
+      });
+      if (!section) {
+        return NextResponse.json({ error: "That section doesn't belong to the selected class." }, { status: 422 });
+      }
+    }
 
     const student = await prisma.$transaction(async (tx) => {
       const created = await tx.student.create({
         data: {
           schoolId,
-          admissionNumber: input.admissionNumber,
-          firstName: input.firstName,
-          middleName: input.middleName,
-          lastName: input.lastName,
-          photoUrl: input.photoUrl,
+          ...input,
+          status: input.status ?? DEFAULT_STUDENT_STATUS,
           dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : undefined,
-          gender: input.gender,
-          bloodGroup: input.bloodGroup,
-          academicYearId: input.academicYearId,
-          classId: input.classId,
-          sectionId: input.sectionId,
-          rollNumber: input.rollNumber,
-          house: input.house,
-          status: input.status,
-          // The simple form still submits a single guardian name/phone; store it
-          // as a real Guardian record rather than as text on the student, so it
-          // can be shared with siblings and extended later.
-          ...(input.guardianName?.trim() && {
-            guardians: {
-              create: {
-                relationship: "guardian",
-                isPrimary: true,
-                isEmergencyContact: true,
-                guardian: {
-                  create: {
-                    schoolId,
-                    firstName: input.guardianName.trim().split(" ")[0],
-                    lastName: input.guardianName.trim().split(" ").slice(1).join(" ") || null,
-                    fullName: input.guardianName.trim(),
-                    mobile: input.guardianPhone?.trim() || null,
-                  },
-                },
-              },
-            },
-          }),
-          emergencyContact: input.emergencyContact,
-          address: input.address,
-          city: input.city,
-          state: input.state,
-          country: input.country,
-          pinCode: input.pinCode,
-          busNumber: input.busNumber,
-          route: input.route,
-          pickupPoint: input.pickupPoint,
+          admissionDate: input.admissionDate ? new Date(input.admissionDate) : undefined,
+          guardians: { create: buildStudentGuardianCreates(schoolId, guardians) },
         },
       });
+
       await createQrVerification(tx, { schoolId, studentId: created.id });
+      await recordAudit(tx, {
+        schoolId,
+        userId: user.id,
+        action: "student.create",
+        entityType: "Student",
+        entityId: created.id,
+        after: { admissionNumber: created.admissionNumber, name: `${created.firstName} ${created.lastName}` },
+      });
+
       return created;
     });
 

@@ -15,6 +15,7 @@ import { apiError } from "@/lib/api-error";
 const PERMISSION_BY_KIND: Partial<Record<UploadKind, [PermissionModule, PermissionAction]>> = {
   staff_photo: ["employees", "edit"],
   staff_document: ["employeeDocuments", "create"],
+  student_document: ["students", "edit"],
   school_document: ["schoolProfile", "edit"],
   candidate_photo: ["candidates", "edit"],
   candidate_resume: ["candidates", "create"],

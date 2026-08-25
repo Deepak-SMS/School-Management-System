@@ -40,6 +40,9 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   if (error) return <ErrorState className="mx-auto max-w-3xl px-6 py-16" onRetry={load} />;
   if (!student) return <LoadingState className="mx-auto max-w-3xl px-6 py-16" />;
 
+  // The flagged main contact, else whoever is listed first.
+  const primaryGuardian = student.guardians?.find((g) => g.isPrimary) ?? student.guardians?.[0];
+
   if (editing) {
     return (
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-8">
@@ -65,18 +68,61 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
             rollNumber: student.rollNumber ?? undefined,
             house: student.house ?? undefined,
             status: student.status as StudentInput["status"],
-            guardianName: student.guardianName ?? undefined,
-            guardianPhone: student.guardianPhone ?? undefined,
+            enrollmentNumber: student.enrollmentNumber ?? undefined,
+            nationality: student.nationality ?? undefined,
+            motherTongue: student.motherTongue ?? undefined,
+            category: student.category ?? undefined,
+            religion: student.religion ?? undefined,
+            govtIdRef: student.govtIdRef ?? undefined,
+            previousSchool: student.previousSchool ?? undefined,
+            previousClass: student.previousClass ?? undefined,
+            admissionDate: student.admissionDate?.slice(0, 10),
+            admissionType: student.admissionType as StudentInput["admissionType"],
+            stream: student.stream ?? undefined,
+            medium: student.medium ?? undefined,
+            promotionStatus: student.promotionStatus as StudentInput["promotionStatus"],
+            emergencyName: student.emergencyName ?? undefined,
+            emergencyRelation: student.emergencyRelation ?? undefined,
             emergencyContact: student.emergencyContact ?? undefined,
+            emergencyAltPhone: student.emergencyAltPhone ?? undefined,
+            emergencyAddress: student.emergencyAddress ?? undefined,
             address: student.address ?? undefined,
+            addressLine2: student.addressLine2 ?? undefined,
             city: student.city ?? undefined,
+            district: student.district ?? undefined,
             state: student.state ?? undefined,
             country: student.country ?? undefined,
             pinCode: student.pinCode ?? undefined,
+            sameAsCurrent: student.sameAsCurrent ?? true,
+            permanentAddress: student.permanentAddress ?? undefined,
+            permanentCity: student.permanentCity ?? undefined,
+            permanentDistrict: student.permanentDistrict ?? undefined,
+            permanentState: student.permanentState ?? undefined,
+            permanentPinCode: student.permanentPinCode ?? undefined,
+            primaryMobile: student.primaryMobile ?? undefined,
+            secondaryMobile: student.secondaryMobile ?? undefined,
+            studentEmail: student.studentEmail ?? undefined,
+            parentEmail: student.parentEmail ?? undefined,
+            whatsappNumber: student.whatsappNumber ?? undefined,
             busNumber: student.busNumber ?? undefined,
             route: student.route ?? undefined,
             pickupPoint: student.pickupPoint ?? undefined,
+            // Existing guardians, so an edit doesn't silently wipe them.
+            guardians: student.guardians?.map((g) => ({
+              relationship: g.relationship as "father",
+              fullName: g.guardian.fullName,
+              mobile: g.guardian.mobile ?? undefined,
+              email: g.guardian.email ?? undefined,
+              occupation: g.guardian.occupation ?? undefined,
+              organization: g.guardian.organization ?? undefined,
+              education: g.guardian.education ?? undefined,
+              isPrimary: g.isPrimary,
+              isEmergencyContact: g.isEmergencyContact,
+              isAuthorizedPickup: g.isAuthorizedPickup,
+              canReceiveFee: g.canReceiveFee,
+            })),
           }}
+          mode="edit"
           onSubmit={async (input) => {
             await studentService.update(id, input);
             toast({ title: "Student updated", variant: "success" });
@@ -123,8 +169,10 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           <Field label="Blood group" value={student.bloodGroup} />
           <Field label="Date of birth" value={student.dateOfBirth?.slice(0, 10)} />
           <Field label="Academic year" value={student.academicYear.label} />
-          <Field label="Guardian" value={student.guardianName} />
-          <Field label="Guardian phone" value={student.guardianPhone} />
+          {/* Guardians are their own records now; the primary contact is shown
+              here and the full list sits in the Guardians card below. */}
+          <Field label="Main contact" value={primaryGuardian?.guardian.fullName} />
+          <Field label="Contact phone" value={primaryGuardian?.guardian.mobile} />
           <Field label="Emergency contact" value={student.emergencyContact} />
           <Field label="City" value={student.city} />
           <Field label="Bus number" value={student.busNumber} />

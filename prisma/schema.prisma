@@ -83,6 +83,7 @@ model School {
   sections             Section[]
   students             Student[]
   guardians            Guardian[]
+  studentDocuments     StudentDocument[]
   schoolDocuments      SchoolDocument[]
   registrationForms    RegistrationForm[]
   studentRegistrations StudentRegistration[]
@@ -431,13 +432,25 @@ model Student {
   status            String    @default("active")
   // Admission
   previousSchool    String?
+  /// The class they were in at the previous school, which is not the same as
+  /// the class they are admitted into here.
+  previousClass     String?
   admissionDate     DateTime?
   admissionType     String?
   admissionClassId  String?
+  // Academic profile — kept on the student because it changes with the year,
+  // not with the admission.
+  /// e.g. Science | Commerce | Arts — only meaningful in senior classes.
+  stream            String?
+  /// Language of instruction, e.g. English | Hindi | Marathi.
+  medium            String?
+  /// pending | promoted | retained | passed_out
+  promotionStatus   String?
   // Current address (line 1 is `address`)
   address           String?
   addressLine2      String?
   city              String?
+  district          String?
   state             String?
   country           String?
   pinCode           String?
@@ -446,6 +459,7 @@ model Student {
   permanentAddress  String?
   permanentLine2    String?
   permanentCity     String?
+  permanentDistrict String?
   permanentState    String?
   permanentCountry  String?
   permanentPinCode  String?
@@ -476,6 +490,7 @@ model Student {
   class           Class                  @relation(fields: [classId], references: [id])
   section         Section?               @relation(fields: [sectionId], references: [id])
   guardians       StudentGuardian[]
+  documents       StudentDocument[]
   registration    StudentRegistration?
   idCards         IDCard[]
   qrVerification  QRVerification?
@@ -484,6 +499,48 @@ model Student {
 
   @@unique([schoolId, admissionNumber])
   @@index([schoolId, classId, sectionId])
+  @@index([schoolId, status])
+}
+
+/// A document filed for a student — the certificates collected at admission and
+/// the academic records that accumulate afterwards.
+///
+/// Both live in one table because they are the same thing to a school office: a
+/// file about this child, filed under a type. `category` separates them for
+/// display so the admission checklist doesn't fill up with report cards.
+///
+/// `documentType`: birth_certificate | transfer_certificate | previous_marksheet |
+///   photograph | address_proof | government_id | caste_certificate |
+///   disability_certificate | migration_certificate | report_card |
+///   board_document | achievement | other
+/// `category`: admission | academic
+/// `status`: pending | verified | rejected
+model StudentDocument {
+  id             String    @id @default(cuid())
+  schoolId       String
+  studentId      String
+  documentType   String
+  category       String    @default("admission")
+  title          String?
+  uploadedFileId String
+  status         String    @default("pending")
+  issuedOn       DateTime?
+  expiresOn      DateTime?
+  version        Int       @default(1)
+  /// The year a report card or marksheet belongs to, so academic records sort.
+  academicYearId String?
+  uploadedById   String?
+  verifiedById   String?
+  verifiedAt     DateTime?
+  note           String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  uploadedFile UploadedFile @relation(fields: [uploadedFileId], references: [id])
+
+  @@index([studentId, category])
   @@index([schoolId, status])
 }
 
@@ -1511,6 +1568,7 @@ model UploadedFile {
   staffExperiences   StaffExperience[]
   candidateDocuments CandidateDocument[]
   schoolDocuments    SchoolDocument[]
+  studentDocuments   StudentDocument[]
 
   @@index([schoolId, kind])
 }

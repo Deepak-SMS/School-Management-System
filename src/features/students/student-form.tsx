@@ -1,307 +1,592 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useEffect, useMemo, useState } from "react";
+import { useForm, Controller, useFieldArray, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
+import { Check, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { studentInputSchema, type StudentInput } from "@/lib/validation/student";
-
-/** Pre-validation shape (e.g. `status` optional before its zod `.default()` applies) — what the form fields actually hold. */
-type StudentFormValues = z.input<typeof studentInputSchema>;
 import { BLOOD_GROUPS, GENDERS, STUDENT_STATUSES } from "@/lib/constants/people";
+import {
+  ADMISSION_TYPES,
+  ADMISSION_TYPE_LABELS,
+  PROMOTION_STATUSES,
+  PROMOTION_STATUS_LABELS,
+  MEDIUM_SUGGESTIONS,
+  STREAM_SUGGESTIONS,
+} from "@/lib/constants/student-documents";
 import { schoolStructureService } from "@/services/schoolStructureService";
 import type { SchoolStructure } from "@/types/student";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { FormField } from "@/components/ui/form-field";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
-import { Spinner } from "@/components/ui/loading-state";
+import { cn } from "@/lib/utils";
 import type { ApiError } from "@/services/studentService";
 
-interface StudentFormProps {
+type StudentFormValues = z.input<typeof studentInputSchema>;
+type Form = UseFormReturn<StudentFormValues, unknown, StudentInput>;
+
+interface StepDef {
+  id: string;
+  title: string;
+  fields: (keyof StudentFormValues)[];
+}
+
+/**
+ * The admission form, in the order an office actually fills it in.
+ *
+ * Documents are absent from the wizard on purpose: they're uploaded against a
+ * saved student from the profile, so a stack of files is never held against a
+ * record that may never be created.
+ */
+const STEPS: StepDef[] = [
+  {
+    id: "student",
+    title: "Student",
+    fields: [
+      "admissionNumber", "enrollmentNumber", "firstName", "middleName", "lastName",
+      "dateOfBirth", "gender", "bloodGroup", "nationality", "motherTongue", "category", "religion", "govtIdRef",
+    ],
+  },
+  {
+    id: "admission",
+    title: "Admission",
+    fields: [
+      "previousSchool", "previousClass", "admissionDate", "admissionType",
+      "academicYearId", "classId", "sectionId", "rollNumber", "house", "stream", "medium", "promotionStatus", "status",
+    ],
+  },
+  { id: "parents", title: "Parents & guardians", fields: ["guardians"] },
+  {
+    id: "address",
+    title: "Address & contact",
+    fields: [
+      "address", "addressLine2", "city", "district", "state", "country", "pinCode",
+      "sameAsCurrent", "permanentAddress", "permanentCity", "permanentDistrict", "permanentState", "permanentPinCode",
+      "primaryMobile", "secondaryMobile", "studentEmail", "parentEmail", "whatsappNumber",
+    ],
+  },
+  {
+    id: "emergency",
+    title: "Emergency",
+    fields: ["emergencyName", "emergencyRelation", "emergencyContact", "emergencyAltPhone", "emergencyAddress"],
+  },
+];
+
+/** The three blocks the admission form asks for, pre-seeded so they're just fill-in. */
+const DEFAULT_GUARDIANS: StudentFormValues["guardians"] = [
+  { relationship: "father", fullName: "", isPrimary: true, isEmergencyContact: true, isAuthorizedPickup: true },
+  { relationship: "mother", fullName: "", isAuthorizedPickup: true },
+];
+
+export function StudentForm({
+  defaultValues,
+  onSubmit,
+  submitLabel = "Add student",
+  mode = "create",
+}: {
   defaultValues?: Partial<StudentInput>;
   onSubmit: (input: StudentInput) => Promise<void>;
   submitLabel?: string;
-}
-
-export function StudentForm({ defaultValues, onSubmit, submitLabel = "Add student" }: StudentFormProps) {
-  const [structure, setStructure] = useState<SchoolStructure | null>(null);
+  mode?: "create" | "edit";
+}) {
   const [serverError, setServerError] = useState<string | null>(null);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [structure, setStructure] = useState<SchoolStructure | null>(null);
 
-  const {
-    register,
-    handleSubmit,
-    control,
-    watch,
-    formState: { errors, isSubmitting },
-  } = useForm<StudentFormValues, unknown, StudentInput>({
+  const form = useForm<StudentFormValues, unknown, StudentInput>({
     resolver: zodResolver(studentInputSchema),
-    defaultValues: { status: "active", ...defaultValues },
+    defaultValues: {
+      country: "India",
+      sameAsCurrent: true,
+      admissionType: "new",
+      guardians: DEFAULT_GUARDIANS,
+      ...defaultValues,
+    },
   });
 
+  const {
+    handleSubmit,
+    trigger,
+    watch,
+    formState: { errors, isSubmitting },
+  } = form;
+
   useEffect(() => {
-    schoolStructureService.get().then(setStructure).catch(() => setServerError("Couldn't load classes/sections."));
+    schoolStructureService.get().then(setStructure).catch(() => undefined);
   }, []);
 
-  const selectedClassId = watch("classId");
-  const sections = structure?.classes.find((c) => c.id === selectedClassId)?.sections ?? [];
+  const isEdit = mode === "edit";
+  const activeStep = STEPS[stepIndex];
+  const isLastStep = stepIndex === STEPS.length - 1;
 
   async function handleFormSubmit(values: StudentInput) {
     setServerError(null);
     try {
       await onSubmit(values);
     } catch (error) {
-      const apiError = error as ApiError;
-      setServerError(apiError?.error ?? "Something went wrong. Please try again.");
+      setServerError((error as ApiError)?.error ?? "Something went wrong. Please try again.");
     }
   }
 
-  if (!structure) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Spinner className="size-5 text-primary-600" />
-      </div>
-    );
+  async function goNext() {
+    const valid = await trigger(activeStep.fields as never, { shouldFocus: true });
+    if (valid) setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
   }
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col gap-6">
-      {serverError && <Alert variant="danger" title="Couldn't save student">{serverError}</Alert>}
+      {serverError && (
+        <Alert variant="danger" title="Couldn't save student">
+          {serverError}
+        </Alert>
+      )}
 
+      {!isEdit && <StepIndicator steps={STEPS} current={stepIndex} />}
+
+      {(isEdit || activeStep.id === "student") && <StudentSection form={form} />}
+      {(isEdit || activeStep.id === "admission") && <AdmissionSection form={form} structure={structure} />}
+      {(isEdit || activeStep.id === "parents") && <GuardiansSection form={form} />}
+      {(isEdit || activeStep.id === "address") && <AddressSection form={form} watch={watch} />}
+      {(isEdit || activeStep.id === "emergency") && <EmergencySection form={form} />}
+
+      <div className="flex items-center justify-between gap-2">
+        {!isEdit && stepIndex > 0 ? (
+          <Button type="button" variant="secondary" onClick={() => setStepIndex((i) => i - 1)}>
+            <ChevronLeft className="size-4" /> Back
+          </Button>
+        ) : (
+          <span />
+        )}
+
+        {isEdit || isLastStep ? (
+          <Button type="submit" isLoading={isSubmitting}>
+            {submitLabel}
+          </Button>
+        ) : (
+          <Button type="button" onClick={goNext}>
+            Continue <ChevronRight className="size-4" />
+          </Button>
+        )}
+      </div>
+
+      {!isEdit && Object.keys(errors).length > 0 && (
+        <p className="text-sm text-danger-600" role="alert">
+          Some required details are missing. Check the earlier steps.
+        </p>
+      )}
+    </form>
+  );
+}
+
+function StepIndicator({ steps, current }: { steps: StepDef[]; current: number }) {
+  return (
+    <ol className="flex flex-wrap items-center gap-x-2 gap-y-3" aria-label="Progress">
+      {steps.map((step, index) => {
+        const done = index < current;
+        const active = index === current;
+        return (
+          <li key={step.id} className="flex items-center gap-2">
+            <span
+              className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium",
+                done && "border-primary-600 bg-primary-600 text-white",
+                active && "border-primary-600 text-primary-700",
+                !done && !active && "border-border text-muted-foreground",
+              )}
+              aria-hidden="true"
+            >
+              {done ? <Check className="size-3.5" /> : index + 1}
+            </span>
+            <span
+              className={cn("text-sm", active ? "font-medium text-foreground" : "text-muted-foreground")}
+              aria-current={active ? "step" : undefined}
+            >
+              {step.title}
+            </span>
+            {index < steps.length - 1 && <span className="hidden h-px w-6 bg-border sm:block" aria-hidden="true" />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function StudentSection({ form }: { form: Form }) {
+  const {
+    register,
+    control,
+    formState: { errors },
+  } = form;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Student information</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        <FormField label="Admission number" required error={errors.admissionNumber?.message}>
+          {(f) => <Input {...f} {...register("admissionNumber")} placeholder="ADM021" />}
+        </FormField>
+        <FormField label="Student ID" description="Your own enrolment number, if you use one">
+          {(f) => <Input {...f} {...register("enrollmentNumber")} />}
+        </FormField>
+        <FormField label="First name" required error={errors.firstName?.message}>
+          {(f) => <Input {...f} {...register("firstName")} placeholder="Aarav" />}
+        </FormField>
+        <FormField label="Middle name">{(f) => <Input {...f} {...register("middleName")} />}</FormField>
+        <FormField label="Last name" required error={errors.lastName?.message}>
+          {(f) => <Input {...f} {...register("lastName")} placeholder="Sharma" />}
+        </FormField>
+        <FormField label="Date of birth" error={errors.dateOfBirth?.message}>
+          {(f) => <Input {...f} {...register("dateOfBirth")} type="date" />}
+        </FormField>
+        <SelectField control={control} name="gender" label="Gender" placeholder="Select gender"
+          options={GENDERS.map((g) => ({ value: g, label: g[0].toUpperCase() + g.slice(1) }))} />
+        <SelectField control={control} name="bloodGroup" label="Blood group" placeholder="Select blood group"
+          options={BLOOD_GROUPS.map((b) => ({ value: b, label: b }))} />
+        <FormField label="Nationality">{(f) => <Input {...f} {...register("nationality")} placeholder="Indian" />}</FormField>
+        <FormField label="Mother tongue">{(f) => <Input {...f} {...register("motherTongue")} />}</FormField>
+
+        <div className="sm:col-span-2">
+          <Alert variant="info">
+            The three fields below are optional and only needed if your school is required to report them. Leave them
+            blank otherwise.
+          </Alert>
+        </div>
+        <FormField label="Category" description="e.g. General / OBC / SC / ST">
+          {(f) => <Input {...f} {...register("category")} />}
+        </FormField>
+        <FormField label="Religion">{(f) => <Input {...f} {...register("religion")} />}</FormField>
+        <FormField
+          label="Government ID reference"
+          className="sm:col-span-2"
+          description="Store a reference, not a full Aadhaar number, unless you must"
+        >
+          {(f) => <Input {...f} {...register("govtIdRef")} />}
+        </FormField>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AdmissionSection({ form, structure }: { form: Form; structure: SchoolStructure | null }) {
+  const {
+    register,
+    control,
+    watch,
+    formState: { errors },
+  } = form;
+
+  const classId = watch("classId");
+  const sections = useMemo(
+    () => structure?.classes.find((c) => c.id === classId)?.sections ?? [],
+    [structure, classId],
+  );
+
+  return (
+    <>
       <Card>
         <CardHeader>
-          <CardTitle>Personal information</CardTitle>
+          <CardTitle>Admission</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Admission number" required error={errors.admissionNumber?.message}>
-            {(field) => <Input {...field} {...register("admissionNumber")} placeholder="ADM021" />}
+          <FormField label="Previous school">{(f) => <Input {...f} {...register("previousSchool")} />}</FormField>
+          <FormField label="Previous class" description="The class they completed there">
+            {(f) => <Input {...f} {...register("previousClass")} />}
           </FormField>
-          <FormField label="First name" required error={errors.firstName?.message}>
-            {(field) => <Input {...field} {...register("firstName")} placeholder="Aarav" />}
+          <FormField label="Admission date" error={errors.admissionDate?.message}>
+            {(f) => <Input {...f} {...register("admissionDate")} type="date" />}
           </FormField>
-          <FormField label="Middle name" error={errors.middleName?.message}>
-            {(field) => <Input {...field} {...register("middleName")} />}
-          </FormField>
-          <FormField label="Last name" required error={errors.lastName?.message}>
-            {(field) => <Input {...field} {...register("lastName")} placeholder="Sharma" />}
-          </FormField>
-          <FormField label="Date of birth" error={errors.dateOfBirth?.message}>
-            {(field) => <Input {...field} {...register("dateOfBirth")} type="date" />}
-          </FormField>
-          <FormField label="Gender" error={errors.gender?.message}>
-            {(field) => (
-              <Controller
-                name="gender"
-                control={control}
-                render={({ field: selectField }) => (
-                  <Select value={selectField.value} onValueChange={selectField.onChange}>
-                    <SelectTrigger id={field.id}>
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {GENDERS.map((g) => (
-                        <SelectItem key={g} value={g}>
-                          {g[0].toUpperCase() + g.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            )}
-          </FormField>
-          <FormField label="Blood group" error={errors.bloodGroup?.message}>
-            {(field) => (
-              <Controller
-                name="bloodGroup"
-                control={control}
-                render={({ field: selectField }) => (
-                  <Select value={selectField.value} onValueChange={selectField.onChange}>
-                    <SelectTrigger id={field.id}>
-                      <SelectValue placeholder="Select blood group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BLOOD_GROUPS.map((bg) => (
-                        <SelectItem key={bg} value={bg}>
-                          {bg}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            )}
-          </FormField>
+          <SelectField control={control} name="admissionType" label="Admission type"
+            options={ADMISSION_TYPES.map((t) => ({ value: t, label: ADMISSION_TYPE_LABELS[t] }))} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Academic information</CardTitle>
+          <CardTitle>Academic placement</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Academic year" required error={errors.academicYearId?.message}>
-            {(field) => (
+          <SelectField control={control} name="academicYearId" label="Academic year" required
+            placeholder="Select academic year" error={errors.academicYearId?.message}
+            options={(structure?.academicYears ?? []).map((y) => ({
+              value: y.id,
+              label: y.isCurrent ? `${y.label} (current)` : y.label,
+            }))} />
+          <SelectField control={control} name="classId" label="Class" required placeholder="Select class"
+            error={errors.classId?.message}
+            options={(structure?.classes ?? []).map((c) => ({ value: c.id, label: c.name }))} />
+          {/* Sections belong to a class, so they only populate once one is chosen. */}
+          <SelectField control={control} name="sectionId" label="Section"
+            placeholder={classId ? "Select section" : "Pick a class first"}
+            options={sections.map((s) => ({ value: s.id, label: s.name }))} />
+          <FormField label="Roll number">{(f) => <Input {...f} {...register("rollNumber")} />}</FormField>
+          <FormField label="House">{(f) => <Input {...f} {...register("house")} />}</FormField>
+          <FormField label="Stream" description={`Senior classes only — e.g. ${STREAM_SUGGESTIONS.join(", ")}`}>
+            {(f) => <Input {...f} {...register("stream")} list="stream-options" />}
+          </FormField>
+          <datalist id="stream-options">
+            {STREAM_SUGGESTIONS.map((s) => <option key={s} value={s} />)}
+          </datalist>
+          <FormField label="Medium of instruction">
+            {(f) => <Input {...f} {...register("medium")} list="medium-options" />}
+          </FormField>
+          <datalist id="medium-options">
+            {MEDIUM_SUGGESTIONS.map((m) => <option key={m} value={m} />)}
+          </datalist>
+          <SelectField control={control} name="promotionStatus" label="Promotion status" placeholder="Not set"
+            options={PROMOTION_STATUSES.map((p) => ({ value: p, label: PROMOTION_STATUS_LABELS[p] }))} />
+          <SelectField control={control} name="status" label="Student status" placeholder="Active"
+            options={STUDENT_STATUSES.map((s) => ({ value: s, label: s[0].toUpperCase() + s.slice(1) }))} />
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+function GuardiansSection({ form }: { form: Form }) {
+  const { control, register } = form;
+  const { fields, append, remove } = useFieldArray({ control, name: "guardians" });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Parents &amp; guardians</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground">
+          Leave a block blank if it doesn&apos;t apply — a card with no name is simply ignored.
+        </p>
+
+        {fields.map((field, index) => (
+          <div key={field.id} className="flex flex-col gap-3 rounded-md border border-border p-3">
+            <div className="flex items-center justify-between gap-2">
               <Controller
-                name="academicYearId"
                 control={control}
-                render={({ field: selectField }) => (
-                  <Select value={selectField.value} onValueChange={selectField.onChange}>
-                    <SelectTrigger id={field.id}>
-                      <SelectValue placeholder="Select academic year" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {structure.academicYears.map((year) => (
-                        <SelectItem key={year.id} value={year.id}>
-                          {year.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            )}
-          </FormField>
-          <FormField label="Class" required error={errors.classId?.message}>
-            {(field) => (
-              <Controller
-                name="classId"
-                control={control}
-                render={({ field: selectField }) => (
-                  <Select value={selectField.value} onValueChange={selectField.onChange}>
-                    <SelectTrigger id={field.id}>
-                      <SelectValue placeholder="Select class" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {structure.classes.map((cls) => (
-                        <SelectItem key={cls.id} value={cls.id}>
-                          {cls.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            )}
-          </FormField>
-          <FormField label="Section" error={errors.sectionId?.message}>
-            {(field) => (
-              <Controller
-                name="sectionId"
-                control={control}
-                render={({ field: selectField }) => (
-                  <Select value={selectField.value} onValueChange={selectField.onChange} disabled={!selectedClassId}>
-                    <SelectTrigger id={field.id}>
-                      <SelectValue placeholder={selectedClassId ? "Select section" : "Select a class first"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sections.map((section) => (
-                        <SelectItem key={section.id} value={section.id}>
-                          {section.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            )}
-          </FormField>
-          <FormField label="Roll number" error={errors.rollNumber?.message}>
-            {(field) => <Input {...field} {...register("rollNumber")} />}
-          </FormField>
-          <FormField label="House" error={errors.house?.message}>
-            {(field) => <Input {...field} {...register("house")} />}
-          </FormField>
-          <FormField label="Student status" error={errors.status?.message}>
-            {(field) => (
-              <Controller
-                name="status"
-                control={control}
-                render={({ field: selectField }) => (
-                  <Select value={selectField.value} onValueChange={selectField.onChange}>
-                    <SelectTrigger id={field.id}>
+                name={`guardians.${index}.relationship`}
+                render={({ field: sel }) => (
+                  <Select value={sel.value ?? "guardian"} onValueChange={sel.onChange}>
+                    <SelectTrigger className="w-44">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {STUDENT_STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s[0].toUpperCase() + s.slice(1)}
+                      {["father", "mother", "guardian", "grandparent", "other"].map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {r[0].toUpperCase() + r.slice(1)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 )}
               />
-            )}
-          </FormField>
-        </CardContent>
-      </Card>
+              {fields.length > 1 && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
+                  <Trash2 className="size-4" /> Remove
+                </Button>
+              )}
+            </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Parent / guardian</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Parent / guardian name" error={errors.guardianName?.message}>
-            {(field) => <Input {...field} {...register("guardianName")} />}
-          </FormField>
-          <FormField label="Parent contact number" error={errors.guardianPhone?.message}>
-            {(field) => <Input {...field} {...register("guardianPhone")} placeholder="+91 98XXXXXXXX" />}
-          </FormField>
-          <FormField label="Emergency contact number" error={errors.emergencyContact?.message}>
-            {(field) => <Input {...field} {...register("emergencyContact")} />}
-          </FormField>
-        </CardContent>
-      </Card>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label="Full name">
+                {(f) => <Input {...f} {...register(`guardians.${index}.fullName`)} />}
+              </FormField>
+              <FormField label="Mobile">
+                {(f) => <Input {...f} {...register(`guardians.${index}.mobile`)} />}
+              </FormField>
+              <FormField label="Email">
+                {(f) => <Input {...f} type="email" {...register(`guardians.${index}.email`)} />}
+              </FormField>
+              <FormField label="Occupation">
+                {(f) => <Input {...f} {...register(`guardians.${index}.occupation`)} />}
+              </FormField>
+              <FormField label="Employer">
+                {(f) => <Input {...f} {...register(`guardians.${index}.organization`)} />}
+              </FormField>
+              <FormField label="Qualification">
+                {(f) => <Input {...f} {...register(`guardians.${index}.education`)} />}
+              </FormField>
+            </div>
 
+            <div className="flex flex-wrap gap-4 text-sm">
+              <CheckboxField control={control} name={`guardians.${index}.isPrimary`} label="Main contact" />
+              <CheckboxField control={control} name={`guardians.${index}.isEmergencyContact`} label="Emergency contact" />
+              <CheckboxField control={control} name={`guardians.${index}.isAuthorizedPickup`} label="Can collect the child" />
+              <CheckboxField control={control} name={`guardians.${index}.canReceiveFee`} label="Receives fee notices" />
+            </div>
+          </div>
+        ))}
+
+        {fields.length < 4 && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => append({ relationship: "guardian", fullName: "", isAuthorizedPickup: true })}
+          >
+            <Plus className="size-4" /> Add another guardian
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AddressSection({ form, watch }: { form: Form; watch: Form["watch"] }) {
+  const { register, control } = form;
+  const sameAsCurrent = watch("sameAsCurrent");
+
+  return (
+    <>
       <Card>
         <CardHeader>
           <CardTitle>Address</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Address" className="sm:col-span-2" error={errors.address?.message}>
-            {(field) => <Textarea {...field} {...register("address")} rows={2} />}
+          <FormField label="Address line 1" className="sm:col-span-2">
+            {(f) => <Textarea {...f} rows={2} {...register("address")} />}
           </FormField>
-          <FormField label="City" error={errors.city?.message}>
-            {(field) => <Input {...field} {...register("city")} />}
+          <FormField label="Address line 2" className="sm:col-span-2">
+            {(f) => <Input {...f} {...register("addressLine2")} />}
           </FormField>
-          <FormField label="State" error={errors.state?.message}>
-            {(field) => <Input {...field} {...register("state")} />}
-          </FormField>
-          <FormField label="Country" error={errors.country?.message}>
-            {(field) => <Input {...field} {...register("country")} />}
-          </FormField>
-          <FormField label="PIN code" error={errors.pinCode?.message}>
-            {(field) => <Input {...field} {...register("pinCode")} />}
-          </FormField>
+          <FormField label="City">{(f) => <Input {...f} {...register("city")} />}</FormField>
+          <FormField label="District">{(f) => <Input {...f} {...register("district")} />}</FormField>
+          <FormField label="State">{(f) => <Input {...f} {...register("state")} />}</FormField>
+          <FormField label="Country">{(f) => <Input {...f} {...register("country")} />}</FormField>
+          <FormField label="PIN code">{(f) => <Input {...f} {...register("pinCode")} />}</FormField>
+
+          <div className="sm:col-span-2">
+            <CheckboxField control={control} name="sameAsCurrent" label="Permanent address is the same as above" />
+          </div>
+
+          {!sameAsCurrent && (
+            <>
+              <FormField label="Permanent address" className="sm:col-span-2">
+                {(f) => <Textarea {...f} rows={2} {...register("permanentAddress")} />}
+              </FormField>
+              <FormField label="City">{(f) => <Input {...f} {...register("permanentCity")} />}</FormField>
+              <FormField label="District">{(f) => <Input {...f} {...register("permanentDistrict")} />}</FormField>
+              <FormField label="State">{(f) => <Input {...f} {...register("permanentState")} />}</FormField>
+              <FormField label="PIN code">{(f) => <Input {...f} {...register("permanentPinCode")} />}</FormField>
+            </>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Transport</CardTitle>
+          <CardTitle>Contact</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-3">
-          <FormField label="Bus number" error={errors.busNumber?.message}>
-            {(field) => <Input {...field} {...register("busNumber")} />}
-          </FormField>
-          <FormField label="Route" error={errors.route?.message}>
-            {(field) => <Input {...field} {...register("route")} />}
-          </FormField>
-          <FormField label="Pickup point" error={errors.pickupPoint?.message}>
-            {(field) => <Input {...field} {...register("pickupPoint")} />}
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <FormField label="Primary mobile">{(f) => <Input {...f} {...register("primaryMobile")} />}</FormField>
+          <FormField label="Alternate mobile">{(f) => <Input {...f} {...register("secondaryMobile")} />}</FormField>
+          <FormField label="WhatsApp number">{(f) => <Input {...f} {...register("whatsappNumber")} />}</FormField>
+          <FormField label="Parent email">{(f) => <Input {...f} type="email" {...register("parentEmail")} />}</FormField>
+          <FormField label="Student email" className="sm:col-span-2">
+            {(f) => <Input {...f} type="email" {...register("studentEmail")} />}
           </FormField>
         </CardContent>
       </Card>
+    </>
+  );
+}
 
-      <div className="flex justify-end gap-2">
-        <Button type="submit" isLoading={isSubmitting}>
-          {submitLabel}
-        </Button>
-      </div>
-    </form>
+function EmergencySection({ form }: { form: Form }) {
+  const { register } = form;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Emergency contact</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        <FormField label="Name">{(f) => <Input {...f} {...register("emergencyName")} />}</FormField>
+        <FormField label="Relationship">
+          {(f) => <Input {...f} {...register("emergencyRelation")} placeholder="Uncle" />}
+        </FormField>
+        <FormField label="Mobile">{(f) => <Input {...f} {...register("emergencyContact")} />}</FormField>
+        <FormField label="Alternate number">{(f) => <Input {...f} {...register("emergencyAltPhone")} />}</FormField>
+        <FormField label="Address" className="sm:col-span-2">
+          {(f) => <Textarea {...f} rows={2} {...register("emergencyAddress")} />}
+        </FormField>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Controller + Select, which every dropdown here needs identically. */
+function SelectField({
+  control,
+  name,
+  label,
+  options,
+  placeholder,
+  error,
+  required,
+}: {
+  control: Form["control"];
+  name: keyof StudentFormValues;
+  label: string;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  error?: string;
+  required?: boolean;
+}) {
+  return (
+    <FormField label={label} required={required} error={error}>
+      {(f) => (
+        <Controller
+          name={name}
+          control={control}
+          render={({ field }) => (
+            <Select
+              value={(field.value as string) ?? ""}
+              onValueChange={field.onChange}
+              disabled={options.length === 0}
+            >
+              <SelectTrigger id={f.id}>
+                <SelectValue placeholder={options.length === 0 ? "None available" : placeholder} />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      )}
+    </FormField>
+  );
+}
+
+function CheckboxField({
+  control,
+  name,
+  label,
+}: {
+  control: Form["control"];
+  // Guardian flags are indexed paths, so this is deliberately wider than a plain key.
+  name: string;
+  label: string;
+}) {
+  return (
+    <Controller
+      control={control}
+      name={name as never}
+      render={({ field }) => (
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={Boolean(field.value)} onCheckedChange={(v) => field.onChange(Boolean(v))} />
+          {label}
+        </label>
+      )}
+    />
   );
 }
