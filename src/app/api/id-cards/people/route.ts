@@ -21,6 +21,10 @@ export async function GET(request: NextRequest) {
     const type = params.get("type") ?? "all";
     const cardStatus = params.get("cardStatus") ?? "all";
     const q = params.get("q")?.trim();
+    // Students narrow by where they sit; staff narrow by who they work for.
+    const classId = params.get("classId") ?? undefined;
+    const sectionId = params.get("sectionId") ?? undefined;
+    const departmentId = params.get("departmentId") ?? undefined;
     const page = Math.max(1, Number(params.get("page") ?? 1));
     const pageSize = Math.min(100, Math.max(1, Number(params.get("pageSize") ?? 25)));
 
@@ -35,6 +39,8 @@ export async function GET(request: NextRequest) {
             where: {
               schoolId,
               status: "active",
+              ...(classId && { classId }),
+              ...(sectionId && { sectionId }),
               ...(q && {
                 OR: [
                   { firstName: { contains: q } },
@@ -62,6 +68,7 @@ export async function GET(request: NextRequest) {
               schoolId,
               ...(type === "teacher" && { category: "teacher" }),
               ...(type === "staff" && { category: { not: "teacher" } }),
+              ...(departmentId && { departmentId }),
               ...(q && {
                 OR: [{ fullName: { contains: q } }, { employeeId: { contains: q } }],
               }),
@@ -121,6 +128,11 @@ export async function GET(request: NextRequest) {
       total,
       page,
       pageSize,
+      /**
+       * Every match, not just this page — so "select all" means the whole
+       * filtered set rather than the 25 rows that happen to be visible.
+       */
+      allIds: filtered.map((p) => ({ id: p.id, personType: p.personType })),
       counts: {
         students: people.filter((p) => p.personType === "student").length,
         teachers: people.filter((p) => p.personType === "teacher").length,
