@@ -19,6 +19,8 @@ export type PermissionModule =
   | "sections"
   | "subjects"
   | "departments"
+  /** ID card generation, templates, and the card register. */
+  | "idCards"
   // Students
   | "students"
   | "guardians"

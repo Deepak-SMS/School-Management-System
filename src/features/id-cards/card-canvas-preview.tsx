@@ -1,5 +1,6 @@
 import { QrCode, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { encodeCode128B } from "@/lib/id-cards/code128";
 
 export interface RenderableElement {
   id?: string;
@@ -34,6 +35,10 @@ interface CardCanvasPreviewProps {
   /** When provided, elements become clickable (used by the Designer to select an element to edit). */
   onElementClick?: (element: RenderableElement) => void;
   selectedElementId?: string;
+  /** The school's actual logo (School Profile → logoUrl) — rendered by any `logo` element instead of the placeholder. */
+  schoolLogoUrl?: string | null;
+  /** The card/admission/employee number a `barcode` element encodes; falls back to sampleData's QR value if omitted. */
+  barcodeValue?: string;
 }
 
 function resolveText(el: RenderableElement, sampleData?: Record<string, string>): string {
@@ -53,6 +58,8 @@ export function CardCanvasPreview({
   className,
   onElementClick,
   selectedElementId,
+  schoolLogoUrl,
+  barcodeValue,
 }: CardCanvasPreviewProps) {
   const sideElements = elements.filter((el) => el.side === side).sort((a, b) => a.zIndex - b.zIndex);
 
@@ -105,6 +112,12 @@ export function CardCanvasPreview({
           }
 
           if (el.type === "logo") {
+            if (schoolLogoUrl) {
+              return (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={key} src={schoolLogoUrl} alt="School logo" onClick={onClick} style={{ ...baseStyle, objectFit: "contain" }} />
+              );
+            }
             return (
               <div key={key} onClick={onClick} style={baseStyle} className="flex items-center justify-center rounded bg-black/5 text-[6px] font-medium text-black/40">
                 LOGO
@@ -118,10 +131,26 @@ export function CardCanvasPreview({
             );
           }
 
-          if (el.type === "qrcode" || el.type === "barcode") {
+          if (el.type === "qrcode") {
             return (
               <div key={key} onClick={onClick} style={baseStyle} className="flex items-center justify-center bg-black/5">
                 <QrCode className="h-4/5 w-4/5 text-black/70" strokeWidth={1} />
+              </div>
+            );
+          }
+
+          if (el.type === "barcode") {
+            const widths = encodeCode128B(barcodeValue || sampleData?.[el.fieldKey ?? ""] || "0000000");
+            const total = widths.reduce((a, b) => a + b, 0) || 1;
+            return (
+              <div key={key} onClick={onClick} style={{ ...baseStyle, display: "flex" }} className="bg-white">
+                {widths.map((w, i) => (
+                  <div
+                    key={i}
+                    style={{ flex: `${w} ${w} 0`, height: "100%", backgroundColor: i % 2 === 0 ? "#000" : "transparent" }}
+                  />
+                ))}
+                {widths.length === 0 && <div className="h-full w-full bg-black/10" style={{ flex: total }} />}
               </div>
             );
           }

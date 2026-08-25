@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentSchoolId } from "@/lib/tenant";
+import { requirePermission } from "@/lib/authorize";
 import { designElementUpdateSchema } from "@/lib/validation/design-element";
 import { apiError } from "@/lib/api-error";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const schoolId = await getCurrentSchoolId();
+    const { schoolId } = await requirePermission("idCards", "edit");
     const { id } = await params;
     const body = await request.json();
     const input = designElementUpdateSchema.parse(body);

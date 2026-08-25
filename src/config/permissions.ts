@@ -27,9 +27,16 @@ const RECRUITMENT_MODULES: PermissionModule[] = ["recruitment", "vacancies", "ca
 /** Student records, their guardians, and parent-submitted admission forms. */
 const STUDENT_MODULES: PermissionModule[] = ["students", "guardians", "studentRegistrations"];
 
+/**
+ * ID cards sit with the office rather than with HR or academics — the same
+ * people who print cards for students also print them for staff.
+ */
+const ID_CARD_MODULES: PermissionModule[] = ["idCards"];
+
 const ALL_MODULES: PermissionModule[] = [
   ...SCHOOL_MODULES,
   ...STUDENT_MODULES,
+  ...ID_CARD_MODULES,
   ...HR_PEOPLE_MODULES,
   ...RECRUITMENT_MODULES,
   "employeeSalary",
@@ -88,6 +95,7 @@ export const ROLE_PERMISSIONS: Record<Role, Partial<Record<PermissionModule, Per
   hr: {
     ...grant(SCHOOL_MODULES, VIEW_EXPORT),
     ...grant(STUDENT_MODULES, VIEW_EXPORT),
+    ...grant(ID_CARD_MODULES, EVERY_ACTION),
     ...grant(HR_PEOPLE_MODULES, EVERY_ACTION),
     ...grant(RECRUITMENT_MODULES, EVERY_ACTION),
     employeeSalary: ["view", "create", "edit", "export"],
@@ -98,6 +106,7 @@ export const ROLE_PERMISSIONS: Record<Role, Partial<Record<PermissionModule, Per
   hr_staff: {
     ...grant(SCHOOL_MODULES, VIEW_ONLY),
     ...grant(STUDENT_MODULES, VIEW_ONLY),
+    ...grant(ID_CARD_MODULES, ["view", "create", "edit", "export"]),
     ...grant(HR_PEOPLE_MODULES, ["view", "create", "edit", "export", "verify"]),
     ...grant(RECRUITMENT_MODULES, ["view", "create", "edit", "export", "screen", "evaluate"]),
   },
@@ -107,6 +116,7 @@ export const ROLE_PERMISSIONS: Record<Role, Partial<Record<PermissionModule, Per
   principal: {
     ...grant(SCHOOL_MODULES, VIEW_EXPORT_EDIT),
     ...grant(STUDENT_MODULES, ["view", "create", "edit", "export", "approve"]),
+    ...grant(ID_CARD_MODULES, VIEW_EXPORT),
     ...grant(HR_PEOPLE_MODULES, ["view", "export", "approve"]),
     ...grant(RECRUITMENT_MODULES, ["view", "export", "evaluate", "select", "approve"]),
   },

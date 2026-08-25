@@ -2,27 +2,49 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { PDFDocument } from "pdf-lib";
 import { prisma } from "@/lib/db";
-import { getCurrentSchoolId } from "@/lib/tenant";
+import { requirePermission } from "@/lib/authorize";
 import { apiError } from "@/lib/api-error";
 import { renderCardPdf, type DesignElementLike } from "@/lib/pdf/render-card-pdf";
-import { resolveStudentFields } from "@/lib/id-cards/resolve-fields";
-import { saveFile } from "@/lib/storage";
+import { resolveStudentFields, resolveStaffFields } from "@/lib/id-cards/resolve-fields";
+import { saveFile, readStoredFile } from "@/lib/storage";
 
 const requestSchema = z.object({
   templateId: z.string().min(1),
-  scope: z.enum(["single", "class", "section", "custom"]),
+  cardType: z.enum(["student", "staff"]).default("student"),
+  scope: z.enum(["single", "class", "section", "category", "custom"]),
   studentIds: z.array(z.string()).optional(),
+  staffIds: z.array(z.string()).optional(),
   classId: z.string().optional(),
   sectionId: z.string().optional(),
+  staffCategory: z.string().optional(),
 });
 
 function verificationUrl(request: NextRequest, code: string) {
   return `${request.nextUrl.origin}/verify/${code}`;
 }
 
+/** Local file URLs look like `/api/files/{uploadedFileId}` — resolve straight to bytes, or null for anything else (external URL, unset). */
+async function readBytesFromStoredUrl(url: string | null | undefined): Promise<Buffer | null> {
+  if (!url) return null;
+  const match = url.match(/\/api\/files\/([^/?]+)/);
+  if (!match) return null;
+  const stored = await readStoredFile(match[1]);
+  return stored?.data ?? null;
+}
+
+interface CardSubject {
+  studentId?: string;
+  staffId?: string;
+  cardNumber: string;
+  fileNamePart: string;
+  qrCode: string | undefined;
+  fieldValues: Record<string, string>;
+  photoUrl: string | null;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const schoolId = await getCurrentSchoolId();
+    const { schoolId } = await requirePermission("idCards", "create");
     const input = requestSchema.parse(await request.json());
 
     const template = await prisma.iDCardTemplate.findFirst({
@@ -32,21 +54,56 @@ export async function POST(request: NextRequest) {
     if (!template) return NextResponse.json({ error: "Template not found." }, { status: 404 });
 
     const school = await prisma.school.findUniqueOrThrow({ where: { id: schoolId } });
+    const logoBytes = await readBytesFromStoredUrl(school.logoUrl);
 
-    const studentWhere =
-      input.scope === "class" && input.classId
-        ? { schoolId, classId: input.classId, status: "active" }
-        : input.scope === "section" && input.sectionId
-          ? { schoolId, sectionId: input.sectionId, status: "active" }
-          : { schoolId, id: { in: input.studentIds ?? [] } };
+    let subjects: CardSubject[];
 
-    const students = await prisma.student.findMany({
-      where: studentWhere,
-      include: { class: true, section: true, academicYear: true, qrVerification: true },
-    });
+    if (input.cardType === "staff") {
+      const staffWhere =
+        input.scope === "category" && input.staffCategory
+          ? { schoolId, category: input.staffCategory, employmentStatus: "active" }
+          : { schoolId, id: { in: input.staffIds ?? [] } };
 
-    if (students.length === 0) {
-      return NextResponse.json({ error: "No students matched this selection." }, { status: 400 });
+      const staffList = await prisma.staff.findMany({
+        where: staffWhere,
+        include: { department: { select: { name: true } }, designation: { select: { name: true } }, qrVerification: true },
+      });
+      if (staffList.length === 0) {
+        return NextResponse.json({ error: "No staff matched this selection." }, { status: 400 });
+      }
+
+      subjects = staffList.map((staff) => ({
+        staffId: staff.id,
+        cardNumber: staff.employeeId,
+        fileNamePart: `${staff.employeeId}_${staff.fullName.replace(/\s+/g, "_")}`,
+        qrCode: staff.qrVerification?.code,
+        fieldValues: resolveStaffFields(staff, school),
+        photoUrl: staff.photoUrl,
+      }));
+    } else {
+      const studentWhere =
+        input.scope === "class" && input.classId
+          ? { schoolId, classId: input.classId, status: "active" }
+          : input.scope === "section" && input.sectionId
+            ? { schoolId, sectionId: input.sectionId, status: "active" }
+            : { schoolId, id: { in: input.studentIds ?? [] } };
+
+      const students = await prisma.student.findMany({
+        where: studentWhere,
+        include: { class: true, section: true, academicYear: true, qrVerification: true },
+      });
+      if (students.length === 0) {
+        return NextResponse.json({ error: "No students matched this selection." }, { status: 400 });
+      }
+
+      subjects = students.map((student) => ({
+        studentId: student.id,
+        cardNumber: student.admissionNumber,
+        fileNamePart: `${student.admissionNumber}_${student.firstName}_${student.lastName}`,
+        qrCode: student.qrVerification?.code,
+        fieldValues: resolveStudentFields(student, school),
+        photoUrl: student.photoUrl,
+      }));
     }
 
     const job = await prisma.iDCardGenerationJob.create({
@@ -57,8 +114,8 @@ export async function POST(request: NextRequest) {
         classId: input.classId,
         sectionId: input.sectionId,
         status: "processing",
-        totalCount: students.length,
-        pdfType: students.length > 1 ? "bulk" : "individual",
+        totalCount: subjects.length,
+        pdfType: subjects.length > 1 ? "bulk" : "individual",
         sides: template.elements.some((e) => e.side === "back") ? "front_back" : "front_only",
       },
     });
@@ -68,30 +125,36 @@ export async function POST(request: NextRequest) {
     let successCount = 0;
     let failedCount = 0;
 
-    for (const student of students) {
+    for (const subject of subjects) {
       try {
-        if (!student.qrVerification) throw new Error("Missing verification record");
+        if (!subject.qrCode) throw new Error("Missing verification record");
 
-        const fieldValues = resolveStudentFields(student, school);
+        const photoBytes = await readBytesFromStoredUrl(subject.photoUrl);
         const pdfBuffer = await renderCardPdf({
           cardWidthMm: template.cardWidthMm,
           cardHeightMm: template.cardHeightMm,
           elements,
-          fieldValues,
-          qrValue: verificationUrl(request, student.qrVerification.code),
-          photoBytes: null, // photo upload lands in a later phase
+          fieldValues: subject.fieldValues,
+          qrValue: verificationUrl(request, subject.qrCode),
+          barcodeValue: subject.cardNumber,
+          photoBytes,
+          logoBytes,
         });
         individualPdfs.push(pdfBuffer);
 
         const { url: pdfUrl } = await saveFile({
           schoolId,
           kind: "generated_pdf",
-          fileName: `${student.admissionNumber}_${student.firstName}_${student.lastName}.pdf`,
+          fileName: `${subject.fileNamePart}.pdf`,
           data: pdfBuffer,
           mimeType: "application/pdf",
         });
 
-        const existingCard = await prisma.iDCard.findFirst({ where: { studentId: student.id, templateId: template.id } });
+        const existingCard = await prisma.iDCard.findFirst({
+          where: subject.studentId
+            ? { studentId: subject.studentId, templateId: template.id }
+            : { staffId: subject.staffId, templateId: template.id },
+        });
         const idCard = existingCard
           ? await prisma.iDCard.update({
               where: { id: existingCard.id },
@@ -101,23 +164,25 @@ export async function POST(request: NextRequest) {
               data: {
                 schoolId,
                 templateId: template.id,
-                studentId: student.id,
+                studentId: subject.studentId,
+                staffId: subject.staffId,
                 status: "generated",
-                cardNumber: student.admissionNumber,
+                cardNumber: subject.cardNumber,
                 pdfUrl,
                 issuedAt: new Date(),
               },
             });
 
         await prisma.iDCardGenerationItem.create({
-          data: { jobId: job.id, studentId: student.id, idCardId: idCard.id, status: "success" },
+          data: { jobId: job.id, studentId: subject.studentId, staffId: subject.staffId, idCardId: idCard.id, status: "success" },
         });
         successCount++;
       } catch (err) {
         await prisma.iDCardGenerationItem.create({
           data: {
             jobId: job.id,
-            studentId: student.id,
+            studentId: subject.studentId,
+            staffId: subject.staffId,
             status: "failed",
             errorMessage: err instanceof Error ? err.message : "Unknown error",
           },

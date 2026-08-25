@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentSchoolId } from "@/lib/tenant";
+import { requirePermission } from "@/lib/authorize";
 import { apiError } from "@/lib/api-error";
 
 /** "Use Template" / "Save as School Template" — clones a template (system or another school template) into this school's own copy. Never mutates the source. */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const schoolId = await getCurrentSchoolId();
+    const { schoolId } = await requirePermission("idCards", "create");
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const name = typeof body?.name === "string" && body.name.trim() ? body.name.trim() : undefined;
