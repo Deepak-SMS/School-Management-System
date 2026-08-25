@@ -13,6 +13,8 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AccessDialog } from "@/features/organization/access-dialog";
+import { OrganizationTree } from "@/features/organization/organization-tree";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ApiError } from "@/services/studentService";
@@ -59,6 +61,8 @@ export function OrganizationChart() {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [accessFor, setAccessFor] = useState<OrgPerson | null>(null);
+  const [view, setView] = useState<"tree" | "list">("tree");
+  const [schoolName, setSchoolName] = useState("School");
   const [reloadKey, setReloadKey] = useState(0);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
@@ -80,6 +84,16 @@ export function OrganizationChart() {
       .catch(() => {
         if (!cancelled) setError(true);
       });
+
+    // The chart's root box is the school itself, so top-level people have
+    // something to hang from.
+    fetch("/api/school")
+      .then((r) => r.json())
+      .then((body) => {
+        if (!cancelled && body?.name) setSchoolName(body.name);
+      })
+      .catch(() => undefined);
+
     return () => {
       cancelled = true;
     };
@@ -157,8 +171,61 @@ export function OrganizationChart() {
 
   const unassigned = people.filter((p) => !p.departmentId);
 
+  const departmentNames = new Map(departments.map((d) => [d.id, d.name]));
+
   return (
     <div className="flex flex-col gap-4">
+      <Tabs value={view} onValueChange={(v) => setView(v as "tree" | "list")}>
+        <TabsList>
+          <TabsTrigger value="tree">Chart</TabsTrigger>
+          <TabsTrigger value="list">By department</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {canEdit && (
+        <Alert variant="info">
+          {view === "tree"
+            ? "Drag a person onto someone else to make them report to them, or onto the school at the top to move them to the top level."
+            : "Drag a person onto someone else to make them report to them, onto a department to move them there, or onto Not reporting to anyone to detach them."}
+        </Alert>
+      )}
+
+      {view === "tree" && (
+        <OrganizationTree
+          people={people}
+          departmentNames={departmentNames}
+          schoolName={schoolName}
+          canEdit={canEdit}
+          canManageAccess={canManageAccess}
+          dragging={dragging}
+          setDragging={setDragging}
+          onDropOnPerson={(target) => {
+            if (dragging && dragging.id !== target.id) {
+              move(dragging, { reportingManagerId: target.id, departmentId: target.departmentId });
+            }
+            setDragging(null);
+          }}
+          onDropOnRoot={() => {
+            if (dragging) move(dragging, { reportingManagerId: null });
+            setDragging(null);
+          }}
+          onGrantAccess={setAccessFor}
+        />
+      )}
+
+      {view === "tree" && accessFor && (
+        <AccessDialog
+          person={accessFor}
+          onClose={() => setAccessFor(null)}
+          onSaved={() => {
+            setAccessFor(null);
+            reload();
+          }}
+        />
+      )}
+
+      {view === "list" && (
+        <>
       <div className="flex flex-wrap items-center gap-2">
         <div className="w-full max-w-xs">
           <Input placeholder="Find a person…" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -167,13 +234,6 @@ export function OrganizationChart() {
           {people.length} {people.length === 1 ? "person" : "people"} · {departments.length} departments
         </span>
       </div>
-
-      {canEdit && (
-        <Alert variant="info">
-          Drag a person onto someone else to make them report to them, onto a department to move them there, or onto
-          <strong> Not reporting to anyone</strong> to detach them.
-        </Alert>
-      )}
 
       {departments.map((department) => {
         const inDepartment = people.filter((p) => p.departmentId === department.id);
@@ -323,6 +383,8 @@ export function OrganizationChart() {
             reload();
           }}
         />
+      )}
+        </>
       )}
     </div>
   );
