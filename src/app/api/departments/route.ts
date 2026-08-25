@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentSchoolId } from "@/lib/tenant";
-import { departmentInputSchema } from "@/lib/validation/department";
+import { departmentInputSchema, DEPARTMENT_DEFAULTS } from "@/lib/validation/department";
 import { cleanEmptyStrings } from "@/lib/validation/shared";
 import { recordAudit } from "@/lib/audit";
 import { apiError } from "@/lib/api-error";
@@ -61,13 +61,13 @@ export async function POST(request: NextRequest) {
           schoolId,
           name: input.name,
           code: input.code,
-          departmentType: input.departmentType,
+          departmentType: input.departmentType ?? DEPARTMENT_DEFAULTS.departmentType,
           headStaffId: input.headStaffId,
           description: input.description,
           campusId: input.campusId,
           email: input.email,
           phone: input.phone,
-          status: input.status,
+          status: input.status ?? DEPARTMENT_DEFAULTS.status,
         },
       });
       await recordAudit(tx, { schoolId, action: "department.create", entityType: "Department", entityId: created.id, after: created });

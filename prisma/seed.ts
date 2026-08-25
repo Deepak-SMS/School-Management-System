@@ -223,19 +223,46 @@ async function main() {
     { first: "Suresh", last: "Pillai", designation: "Librarian", category: "librarian", dept: "Library", type: "PERMANENT", status: "on_leave", gender: "male" },
     { first: "Ramesh", last: "Chawla", designation: "Bus Driver", category: "driver", dept: "Transport", type: "CONTRACT", status: "active", gender: "male" },
     { first: "Farida", last: "Sheikh", designation: "Front Office Executive", category: "admin_staff", dept: "Administration", type: "PART_TIME", status: "notice_period", gender: "female" },
+    { first: "Kamala", last: "Devi", designation: "Housekeeping Supervisor", category: "support_staff", dept: "Housekeeping", type: "PERMANENT", status: "active", gender: "female" },
+    { first: "Gopal", last: "Yadav", designation: "Security Guard", category: "security", dept: "Housekeeping", type: "CONTRACT", status: "active", gender: "male" },
   ];
+
+  /**
+   * Departments carry a real type rather than defaulting everything to
+   * "academic" — Finance, Library and Transport are not academic departments,
+   * and the dashboard groups by this.
+   */
+  const DEPARTMENT_TYPES_BY_NAME: Record<string, string> = {
+    Academics: "academic",
+    Administration: "administration",
+    Finance: "finance",
+    Library: "library",
+    Transport: "transport",
+    Housekeeping: "support",
+    HR: "hr",
+    IT: "it",
+  };
 
   const departmentIds = new Map<string, string>();
   async function departmentId(name: string): Promise<string> {
     if (departmentIds.has(name)) return departmentIds.get(name)!;
     const code = name.toUpperCase().replace(/[^A-Z0-9]+/g, "_").slice(0, 20);
+    const departmentType = DEPARTMENT_TYPES_BY_NAME[name] ?? "other";
     const dept = await prisma.department.upsert({
       where: { schoolId_code: { schoolId: school.id, code } },
-      update: {},
-      create: { schoolId: school.id, name, code },
+      // Corrects departments seeded before types were set.
+      update: { departmentType },
+      create: { schoolId: school.id, name, code, departmentType },
     });
     departmentIds.set(name, dept.id);
     return dept.id;
+  }
+
+  // Seed departments unconditionally. The staff block below is skipped once
+  // staff exist, so leaving this to it would never correct a database seeded
+  // before departments carried a type.
+  for (const name of Object.keys(DEPARTMENT_TYPES_BY_NAME)) {
+    await departmentId(name);
   }
 
   const designationIds = new Map<string, string>();
