@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, FileDown } from "lucide-react";
 import { CardCanvasPreview } from "@/features/id-cards/card-canvas-preview";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -151,7 +151,15 @@ export function CardPreviewModal({
             </>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            {data && (
+              <Button asChild variant="secondary">
+                {/* Streams the print-ready PDF of this exact design. */}
+                <a href={`/api/id-cards/people/${personType}/${personId}/pdf`} download>
+                  <FileDown className="size-4" /> Download PDF
+                </a>
+              </Button>
+            )}
             <Button variant="secondary" onClick={onClose}>
               Close
             </Button>

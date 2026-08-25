@@ -2,8 +2,9 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Lock, Copy } from "lucide-react";
+import { Lock, Copy, ArrowLeft } from "lucide-react";
 import { CardCanvasPreview, type RenderableElement } from "@/features/id-cards/card-canvas-preview";
+import { TemplateBrowser } from "@/features/id-cards/template-browser";
 import { SAMPLE_CARD_DATA } from "@/features/id-cards/sample-card-data";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,6 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Alert } from "@/components/ui/alert";
 import { LoadingState } from "@/components/ui/loading-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { EmptyState } from "@/components/ui/empty-state";
 import { toast } from "@/hooks/use-toast";
 
 interface TemplateDetail {
@@ -96,8 +96,17 @@ function DesignerInner() {
 
   if (!templateId) {
     return (
-      <div className="mx-auto max-w-3xl px-6 py-16">
-        <EmptyState title="No template selected" description="Open a template from the Templates gallery to design it." />
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
+        {/* No template chosen yet — the browser IS the landing state, so the
+            designer is self-contained and there's no separate gallery page. */}
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Card Designer</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Pick the design each kind of card uses, then edit it. The design marked <strong>Fixed</strong> is what
+            previews and printed PDFs use.
+          </p>
+        </div>
+        <TemplateBrowser selectedId={null} onSelect={(id) => router.push(`/id-cards/designer?templateId=${id}`)} />
       </div>
     );
   }
@@ -111,9 +120,12 @@ function DesignerInner() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">{template.name}</h1>
+          <Button variant="ghost" size="sm" onClick={() => router.push("/id-cards/designer")}>
+            <ArrowLeft className="size-4" /> All designs
+          </Button>
+          <h1 className="mt-1 text-xl font-semibold text-foreground">{template.name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {template.cardWidthMm} × {template.cardHeightMm} mm · {template.orientation}
           </p>

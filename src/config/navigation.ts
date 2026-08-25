@@ -165,7 +165,8 @@ const adminNavigation: NavSection[] = [
     roles: ["super_admin", "school_admin", "principal"],
     items: [
       { label: "Dashboard", href: "/id-cards" },
-      { label: "Templates", href: "/id-cards/templates" },
+      // Templates folded into the Designer — choosing a design and editing it
+      // are the same task, so they're no longer two destinations.
       { label: "Designer", href: "/id-cards/designer" },
       { label: "Generate Cards", href: "/id-cards/generate" },
       { label: "Generated Cards", href: "/id-cards/generated" },
