@@ -41,6 +41,7 @@ const adminNavigation: NavSection[] = [
       { label: "Subjects", href: "/school/subjects" },
       { label: "Departments", href: "/school/departments" },
       { label: "Organization", href: "/school/organization" },
+      { label: "Database", href: "/school/database", roles: ["super_admin", "school_admin"] },
     ],
   },
   {

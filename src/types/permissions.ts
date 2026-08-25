@@ -19,6 +19,12 @@ export type PermissionModule =
   | "sections"
   | "subjects"
   | "departments"
+  /**
+   * Whole-database Excel export/import. Deliberately its own module: it reaches
+   * across every other one at once, so holding it is a far bigger grant than
+   * holding `students:export` and `employees:export` separately.
+   */
+  | "database"
   /** ID card generation, templates, and the card register. */
   | "idCards"
   // Students

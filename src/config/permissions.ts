@@ -34,6 +34,7 @@ const STUDENT_MODULES: PermissionModule[] = ["students", "guardians", "studentRe
 const ID_CARD_MODULES: PermissionModule[] = ["idCards"];
 
 const ALL_MODULES: PermissionModule[] = [
+  "database",
   ...SCHOOL_MODULES,
   ...STUDENT_MODULES,
   ...ID_CARD_MODULES,
@@ -82,6 +83,9 @@ function grant(
  * Deliberate separations:
  * - `employeeSalary` (bank/PAN/salary) is granted only to HR Admin, School
  *   Admin, Super Admin and Accountant — not to Principal, HR Staff or HOD.
+ * - `database` (whole-database export/import) is School Admin and Super Admin
+ *   only. It crosses every module at once, so it is not implied by holding
+ *   export rights on the individual ones.
  * - Recruitment roles get no payroll access (spec §3.18).
  * - `teacher` holds no HR-wide grants; employees reach their own record through
  *   Employee Self-Service, which scopes by staff id rather than by role.
