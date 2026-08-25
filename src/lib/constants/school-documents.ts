@@ -31,12 +31,10 @@ export const SCHOOL_DOCUMENT_TYPES = [
     field: "boardAffiliationNumber",
     hint: "Board affiliation letter (CBSE / ICSE / State)",
   },
-  {
-    value: "school_code",
-    label: "School Code",
-    field: "schoolCode",
-    hint: "Board-issued school code letter",
-  },
+  // School Code is deliberately absent: it's an identifier the school is given,
+  // not a certificate it holds, and it already appears under Basic information
+  // and Government & Board IDs. A board letter that happens to carry it belongs
+  // under Board Affiliation Number.
   {
     value: "rte_registration",
     label: "RTE Recognition / Registration No.",

@@ -48,7 +48,6 @@ export interface SchoolRegistrationNumbers {
   udiseSchoolId?: string | null;
   recognitionNumber?: string | null;
   boardAffiliationNumber?: string | null;
-  schoolCode?: string | null;
   rteRegistrationNumber?: string | null;
   nocNumber?: string | null;
 }
