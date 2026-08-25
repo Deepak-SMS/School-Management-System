@@ -1,5 +1,5 @@
 import type { StudentInput } from "@/lib/validation/student";
-import type { StudentListResponse, StudentRecord } from "@/types/student";
+import type { StudentDocumentRecord, StudentListResponse, StudentRecord } from "@/types/student";
 
 export interface StudentListParams {
   q?: string;
@@ -56,6 +56,11 @@ export const studentService = {
       body: JSON.stringify(input),
     });
     return parseOrThrow<StudentRecord>(response);
+  },
+
+  async listDocuments(id: string): Promise<{ data: StudentDocumentRecord[]; total: number }> {
+    const response = await fetch(`/api/students/${id}/documents`);
+    return parseOrThrow<{ data: StudentDocumentRecord[]; total: number }>(response);
   },
 
   async remove(id: string): Promise<void> {

@@ -147,16 +147,18 @@ export function StudentForm({
         </Alert>
       )}
 
-      {!isEdit && <StepIndicator steps={STEPS} current={stepIndex} />}
+      {/* Editing walks the same five steps as adding, so the form a school
+          teaches its staff once is the only form they ever see. */}
+      <StepIndicator steps={STEPS} current={stepIndex} onSelect={isEdit ? setStepIndex : undefined} />
 
-      {(isEdit || activeStep.id === "student") && <StudentSection form={form} />}
-      {(isEdit || activeStep.id === "admission") && <AdmissionSection form={form} structure={structure} />}
-      {(isEdit || activeStep.id === "parents") && <GuardiansSection form={form} />}
-      {(isEdit || activeStep.id === "address") && <AddressSection form={form} watch={watch} />}
-      {(isEdit || activeStep.id === "emergency") && <EmergencySection form={form} />}
+      {activeStep.id === "student" && <StudentSection form={form} />}
+      {activeStep.id === "admission" && <AdmissionSection form={form} structure={structure} />}
+      {activeStep.id === "parents" && <GuardiansSection form={form} />}
+      {activeStep.id === "address" && <AddressSection form={form} watch={watch} />}
+      {activeStep.id === "emergency" && <EmergencySection form={form} />}
 
       <div className="flex items-center justify-between gap-2">
-        {!isEdit && stepIndex > 0 ? (
+        {stepIndex > 0 ? (
           <Button type="button" variant="secondary" onClick={() => setStepIndex((i) => i - 1)}>
             <ChevronLeft className="size-4" /> Back
           </Button>
@@ -164,18 +166,23 @@ export function StudentForm({
           <span />
         )}
 
-        {isEdit || isLastStep ? (
-          <Button type="submit" isLoading={isSubmitting}>
-            {submitLabel}
-          </Button>
-        ) : (
-          <Button type="button" onClick={goNext}>
-            Continue <ChevronRight className="size-4" />
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {!isLastStep && (
+            <Button type="button" variant={isEdit ? "secondary" : "primary"} onClick={goNext}>
+              Continue <ChevronRight className="size-4" />
+            </Button>
+          )}
+          {/* An edit is usually one field on one step — don't make it a
+              five-click journey to reach Save. */}
+          {(isEdit || isLastStep) && (
+            <Button type="submit" isLoading={isSubmitting}>
+              {submitLabel}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {!isEdit && Object.keys(errors).length > 0 && (
+      {Object.keys(errors).length > 0 && (
         <p className="text-sm text-danger-600" role="alert">
           Some required details are missing. Check the earlier steps.
         </p>
@@ -184,14 +191,28 @@ export function StudentForm({
   );
 }
 
-function StepIndicator({ steps, current }: { steps: StepDef[]; current: number }) {
+/**
+ * Steps are only clickable when `onSelect` is passed — editing an existing
+ * student, where every step already holds saved data and jumping straight to
+ * the one you came for beats clicking Continue four times. A new admission
+ * still has to walk them in order so each step's validation runs.
+ */
+function StepIndicator({
+  steps,
+  current,
+  onSelect,
+}: {
+  steps: StepDef[];
+  current: number;
+  onSelect?: (index: number) => void;
+}) {
   return (
     <ol className="flex flex-wrap items-center gap-x-2 gap-y-3" aria-label="Progress">
       {steps.map((step, index) => {
         const done = index < current;
         const active = index === current;
-        return (
-          <li key={step.id} className="flex items-center gap-2">
+        const content = (
+          <>
             <span
               className={cn(
                 "flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium",
@@ -209,6 +230,22 @@ function StepIndicator({ steps, current }: { steps: StepDef[]; current: number }
             >
               {step.title}
             </span>
+          </>
+        );
+
+        return (
+          <li key={step.id} className="flex items-center gap-2">
+            {onSelect ? (
+              <button
+                type="button"
+                onClick={() => onSelect(index)}
+                className="flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:hover:bg-white/5"
+              >
+                {content}
+              </button>
+            ) : (
+              content
+            )}
             {index < steps.length - 1 && <span className="hidden h-px w-6 bg-border sm:block" aria-hidden="true" />}
           </li>
         );
