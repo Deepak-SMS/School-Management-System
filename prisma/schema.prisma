@@ -131,6 +131,7 @@ model User {
 
   memberships SchoolMembership[]
   sessions    Session[]
+  staff       Staff?
 }
 
 /// Server-side login session. The cookie carries a random token; only its
@@ -625,6 +626,10 @@ model Staff {
   id                 String    @id @default(cuid())
   schoolId           String
   employeeId         String
+  /// The login this employee signs in with, once one is granted. Their access
+  /// level lives on the matching SchoolMembership, not here — one person, one
+  /// account, one role per school.
+  userId             String?  @unique
   fullName           String
   firstName          String?
   middleName         String?
@@ -673,6 +678,7 @@ model Staff {
   updatedAt          DateTime  @updatedAt
 
   school             School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user               User?                  @relation(fields: [userId], references: [id])
   department         Department?            @relation("StaffDepartment", fields: [departmentId], references: [id])
   designation        Designation?           @relation(fields: [designationId], references: [id])
   campus             Campus?                @relation("StaffCampus", fields: [campusId], references: [id])
