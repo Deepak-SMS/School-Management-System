@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, Plus, BookOpen, Download } from "lucide-react";
+import { Search, Plus, BookOpen, Download, Pencil, Trash2, UserPlus } from "lucide-react";
 import { subjectService } from "@/services/subjectService";
-import type { SubjectListResponse } from "@/types/subject";
+import type { SubjectListResponse, SubjectRecord } from "@/types/subject";
+import type { ApiError } from "@/services/studentService";
 import { SUBJECT_TYPES, SUBJECT_TYPE_LABELS } from "@/lib/constants/school";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { useCurrentUser } from "@/providers/user-provider";
@@ -17,6 +18,12 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { TableSkeleton } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Modal, ModalContent } from "@/components/ui/modal";
+import { SubjectForm } from "@/features/subjects/subject-form";
+import { AssignTeacherModal } from "@/features/subjects/assign-teacher-modal";
+import type { SubjectInput } from "@/lib/validation/subject";
+import { toast } from "@/hooks/use-toast";
 
 const PAGE_SIZE = 20;
 
@@ -24,6 +31,8 @@ export function SubjectTable() {
   const user = useCurrentUser();
   const canCreate = hasPermission(user.role, "subjects", "create");
   const canExport = hasPermission(user.role, "subjects", "export");
+  const canEdit = hasPermission(user.role, "subjects", "edit");
+  const canDelete = hasPermission(user.role, "subjects", "delete");
 
   const [result, setResult] = useState<SubjectListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +40,11 @@ export function SubjectTable() {
   const [search, setSearch] = useState("");
   const [subjectType, setSubjectType] = useState("");
   const [page, setPage] = useState(1);
+  const [editing, setEditing] = useState<SubjectRecord | null>(null);
+  const [deleting, setDeleting] = useState<SubjectRecord | null>(null);
+  const [assigning, setAssigning] = useState<SubjectRecord | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -43,7 +57,35 @@ export function SubjectTable() {
         .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(timeout);
-  }, [search, subjectType, page]);
+  }, [search, subjectType, page, reloadKey]);
+
+  /**
+   * A subject assigned to classes can't be deleted — the API refuses it, since
+   * removing it would orphan those assignments. Deactivating is the honest
+   * alternative, so that's what the dialog offers in that case.
+   */
+  const deletingIsAssigned = (deleting?.counts?.classes ?? 0) > 0;
+
+  async function handleDeleteOrDeactivate() {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    try {
+      if (deletingIsAssigned) {
+        await subjectService.update(deleting.id, { status: "inactive" });
+        toast({ title: `${deleting.name} deactivated`, variant: "success" });
+      } else {
+        await subjectService.remove(deleting.id);
+        toast({ title: `${deleting.name} deleted`, variant: "success" });
+      }
+      setDeleting(null);
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      toast({ title: (e as ApiError)?.error ?? "Couldn't update the subject", variant: "danger" });
+      setDeleting(null);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
 
   const totalPages = result ? Math.max(1, Math.ceil(result.total / PAGE_SIZE)) : 1;
 
@@ -158,9 +200,26 @@ export function SubjectTable() {
                     <Badge variant={subject.status === "active" ? "success" : "neutral"}>{subject.status}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={`/school/subjects/${subject.id}`}>View</Link>
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/school/subjects/${subject.id}`}>View</Link>
+                      </Button>
+                      {canEdit && (
+                        <Button variant="ghost" size="sm" onClick={() => setAssigning(subject)}>
+                          <UserPlus className="size-4" /> Add teacher
+                        </Button>
+                      )}
+                      {canEdit && (
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(subject)}>
+                          <Pencil className="size-4" /> Edit
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button variant="ghost" size="sm" onClick={() => setDeleting(subject)}>
+                          <Trash2 className="size-4" /> Delete
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -185,6 +244,62 @@ export function SubjectTable() {
           </div>
         </>
       )}
+
+      {editing && (
+        <Modal open onOpenChange={(v) => !v && setEditing(null)}>
+          <ModalContent title={`Edit ${editing.name}`} size="lg">
+            <SubjectForm
+              submitLabel="Save changes"
+              defaultValues={{
+                name: editing.name,
+                code: editing.code,
+                subjectType: editing.subjectType as SubjectInput["subjectType"],
+                natureType: editing.natureType as SubjectInput["natureType"],
+                description: editing.description ?? undefined,
+                maxMarks: editing.maxMarks ?? undefined,
+                passingMarks: editing.passingMarks ?? undefined,
+                credits: editing.credits ?? undefined,
+                gradingSystem: (editing.gradingSystem ?? undefined) as SubjectInput["gradingSystem"],
+                status: editing.status as SubjectInput["status"],
+              }}
+              onSubmit={async (input) => {
+                await subjectService.update(editing.id, input);
+                toast({ title: "Subject updated", variant: "success" });
+                setEditing(null);
+                setReloadKey((k) => k + 1);
+              }}
+            />
+          </ModalContent>
+        </Modal>
+      )}
+
+      {assigning && (
+        <AssignTeacherModal
+          subject={assigning}
+          onClose={() => setAssigning(null)}
+          onAssigned={() => {
+            setAssigning(null);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        title={
+          deletingIsAssigned ? `Deactivate ${deleting?.name ?? "subject"}?` : `Delete ${deleting?.name ?? "subject"}?`
+        }
+        description={
+          deletingIsAssigned
+            ? `This subject is assigned to ${deleting?.counts?.classes} class(es), so it can't be deleted — that would orphan those assignments. It will be deactivated instead: hidden from pickers, but kept on record. Remove it from those classes first if you want to delete it.`
+            : "This subject isn't assigned to any class and will be deleted permanently."
+        }
+        confirmLabel={deletingIsAssigned ? "Deactivate" : "Delete subject"}
+        variant="destructive"
+        isLoading={deleteBusy}
+        onConfirm={handleDeleteOrDeactivate}
+      />
     </div>
   );
 }

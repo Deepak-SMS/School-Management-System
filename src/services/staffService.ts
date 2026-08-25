@@ -6,6 +6,9 @@ export interface StaffListParams {
   q?: string;
   category?: string;
   employmentStatus?: string;
+  departmentId?: string;
+  /** e.g. "academic" — restricts results to staff in departments of that type. */
+  departmentType?: string;
   page?: number;
   pageSize?: number;
 }
@@ -21,6 +24,8 @@ export const staffService = {
     const query = new URLSearchParams();
     if (params.q) query.set("q", params.q);
     if (params.category) query.set("category", params.category);
+    if (params.departmentId) query.set("departmentId", params.departmentId);
+    if (params.departmentType) query.set("departmentType", params.departmentType);
     if (params.employmentStatus) query.set("employmentStatus", params.employmentStatus);
     if (params.page) query.set("page", String(params.page));
     if (params.pageSize) query.set("pageSize", String(params.pageSize));

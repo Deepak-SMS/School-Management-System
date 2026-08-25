@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentSchoolId } from "@/lib/tenant";
+import { requirePermission } from "@/lib/authorize";
 import { recordAudit } from "@/lib/audit";
 import { apiError } from "@/lib/api-error";
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string; assignmentId: string }> }) {
   try {
-    const schoolId = await getCurrentSchoolId();
+    const { schoolId } = await requirePermission("subjects", "edit");
     const { id: subjectId, assignmentId } = await params;
 
     const existing = await prisma.subjectAssignment.findFirst({ where: { id: assignmentId, subjectId, schoolId } });

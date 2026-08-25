@@ -39,6 +39,12 @@ export async function GET(request: NextRequest) {
     const category = params.get("category") ?? undefined;
     const employmentStatus = params.get("employmentStatus") ?? undefined;
     const departmentId = params.get("departmentId") ?? undefined;
+    /**
+     * Filters to staff whose department is of a given type — e.g. only people in
+     * academic departments are eligible to teach a subject, so a bus driver
+     * never appears in a teacher picker.
+     */
+    const departmentType = params.get("departmentType") ?? undefined;
     const designationId = params.get("designationId") ?? undefined;
     const employeeTypeId = params.get("employeeTypeId") ?? undefined;
     const campusId = params.get("campusId") ?? undefined;
@@ -58,6 +64,7 @@ export async function GET(request: NextRequest) {
       ...(employedOnly && { employmentStatus: { in: [...ACTIVE_EMPLOYMENT_STATUSES] } }),
       ...(probationOnly && { employmentStatus: "probation" }),
       ...(departmentId && { departmentId }),
+      ...(departmentType && { department: { departmentType } }),
       ...(designationId && { designationId }),
       ...(employeeTypeId && { employeeTypeId }),
       ...(campusId && { campusId }),

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentSchoolId } from "@/lib/tenant";
+import { requirePermission } from "@/lib/authorize";
 import { subjectAssignmentInputSchema } from "@/lib/validation/subject";
 import { cleanEmptyStrings } from "@/lib/validation/shared";
 import { recordAudit } from "@/lib/audit";
@@ -8,7 +8,7 @@ import { apiError } from "@/lib/api-error";
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const schoolId = await getCurrentSchoolId();
+    const { schoolId } = await requirePermission("subjects", "edit");
     const { id: subjectId } = await params;
     const body = await request.json();
     const input = cleanEmptyStrings(subjectAssignmentInputSchema.parse(body));
