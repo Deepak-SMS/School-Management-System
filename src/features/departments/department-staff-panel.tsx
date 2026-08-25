@@ -227,19 +227,30 @@ function DepartmentRow({
     }
   }
 
-  async function deleteDepartment() {
+  /**
+   * The API refuses to delete a department that still has staff, since that
+   * would orphan their records. Deactivate is the honest alternative, so the
+   * dialog offers that instead of a delete that would fail.
+   */
+  async function deleteOrDeactivateDepartment() {
     try {
-      await departmentService.remove(dept.id);
-      toast({ title: `${dept.name} deleted`, variant: "success" });
+      if (hasStaff) {
+        await departmentService.update(dept.id, { status: "inactive" });
+        toast({ title: `${dept.name} deactivated`, variant: "success" });
+      } else {
+        await departmentService.remove(dept.id);
+        toast({ title: `${dept.name} deleted`, variant: "success" });
+      }
       setDeletingDept(false);
       onChanged();
     } catch (e) {
-      toast({ title: (e as ApiError)?.error ?? "Couldn't delete the department", variant: "danger" });
+      toast({ title: (e as ApiError)?.error ?? "Couldn't update the department", variant: "danger" });
       setDeletingDept(false);
     }
   }
 
   const employeeCount = staff?.length ?? dept.counts?.employees ?? 0;
+  const hasStaff = employeeCount > 0;
 
   return (
     <div className="rounded-lg border border-border">
@@ -384,15 +395,15 @@ function DepartmentRow({
       <ConfirmDialog
         open={deletingDept}
         onOpenChange={setDeletingDept}
-        title={`Delete ${dept.name}?`}
+        title={hasStaff ? `Deactivate ${dept.name}?` : `Delete ${dept.name}?`}
         description={
-          employeeCount > 0
-            ? `${employeeCount} employee(s) are in this department. They stay on staff but will be left without a department.`
-            : "This department has no staff and will be deleted."
+          hasStaff
+            ? `${employeeCount} employee(s) work here, so this department can't be deleted — that would orphan their records. It will be deactivated instead. Move the staff elsewhere first if you want to delete it.`
+            : "This department has no staff and will be deleted permanently."
         }
-        confirmLabel="Delete department"
+        confirmLabel={hasStaff ? "Deactivate" : "Delete department"}
         variant="destructive"
-        onConfirm={deleteDepartment}
+        onConfirm={deleteOrDeactivateDepartment}
       />
     </div>
   );

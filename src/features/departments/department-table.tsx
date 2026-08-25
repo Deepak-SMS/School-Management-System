@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, Plus, Building, Download } from "lucide-react";
+import { Search, Plus, Building, Download, Pencil, Trash2 } from "lucide-react";
 import { departmentService } from "@/services/departmentService";
-import type { DepartmentListResponse } from "@/types/department";
+import type { DepartmentListResponse, DepartmentRecord } from "@/types/department";
+import type { ApiError } from "@/services/studentService";
 import { DEPARTMENT_TYPES, DEPARTMENT_TYPE_LABELS } from "@/lib/constants/school";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { useCurrentUser } from "@/providers/user-provider";
@@ -17,6 +18,11 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { TableSkeleton } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Modal, ModalContent } from "@/components/ui/modal";
+import { DepartmentForm } from "@/features/departments/department-form";
+import type { DepartmentInput } from "@/lib/validation/department";
+import { toast } from "@/hooks/use-toast";
 
 const PAGE_SIZE = 20;
 
@@ -24,6 +30,8 @@ export function DepartmentTable() {
   const user = useCurrentUser();
   const canCreate = hasPermission(user.role, "departments", "create");
   const canExport = hasPermission(user.role, "departments", "export");
+  const canEdit = hasPermission(user.role, "departments", "edit");
+  const canDelete = hasPermission(user.role, "departments", "delete");
 
   const [result, setResult] = useState<DepartmentListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +39,10 @@ export function DepartmentTable() {
   const [search, setSearch] = useState("");
   const [departmentType, setDepartmentType] = useState("");
   const [page, setPage] = useState(1);
+  const [deleting, setDeleting] = useState<DepartmentRecord | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [editing, setEditing] = useState<DepartmentRecord | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -43,7 +55,40 @@ export function DepartmentTable() {
         .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(timeout);
-  }, [search, departmentType, page]);
+  }, [search, departmentType, page, reloadKey]);
+
+  /**
+   * A department with staff can't be deleted — the API refuses it, because
+   * removing it would orphan those employees' history. In that case the honest
+   * action is to deactivate, so the dialog offers exactly that rather than
+   * promising a delete that would fail.
+   */
+  const deletingHasStaff = (deleting?.counts?.employees ?? 0) > 0;
+
+  async function handleDeleteOrDeactivate() {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    try {
+      if (deletingHasStaff) {
+        await departmentService.update(deleting.id, { status: "inactive" });
+        toast({
+          title: `${deleting.name} deactivated`,
+          description: "It stays on record for the staff assigned to it.",
+          variant: "success",
+        });
+      } else {
+        await departmentService.remove(deleting.id);
+        toast({ title: `${deleting.name} deleted`, variant: "success" });
+      }
+      setDeleting(null);
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      toast({ title: (e as ApiError)?.error ?? "Couldn't update the department", variant: "danger" });
+      setDeleting(null);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
 
   const totalPages = result ? Math.max(1, Math.ceil(result.total / PAGE_SIZE)) : 1;
 
@@ -152,9 +197,21 @@ export function DepartmentTable() {
                     <Badge variant={dept.status === "active" ? "success" : "neutral"}>{dept.status}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={`/school/departments/${dept.id}`}>View</Link>
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/school/departments/${dept.id}`}>View</Link>
+                      </Button>
+                      {canEdit && (
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(dept)}>
+                          <Pencil className="size-4" /> Edit
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button variant="ghost" size="sm" onClick={() => setDeleting(dept)}>
+                          <Trash2 className="size-4" /> Delete
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -178,6 +235,52 @@ export function DepartmentTable() {
             </div>
           </div>
         </>
+      )}
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        title={
+          deletingHasStaff
+            ? `Deactivate ${deleting?.name ?? "department"}?`
+            : `Delete ${deleting?.name ?? "department"}?`
+        }
+        description={
+          deletingHasStaff
+            ? `${deleting?.counts?.employees} employee(s) work here, so this department can't be deleted — that would orphan their records. It will be deactivated instead: hidden from pickers, but kept on record. Move the staff elsewhere first if you want to delete it.`
+            : "This department has no staff and will be deleted permanently."
+        }
+        confirmLabel={deletingHasStaff ? "Deactivate" : "Delete department"}
+        variant="destructive"
+        isLoading={deleteBusy}
+        onConfirm={handleDeleteOrDeactivate}
+      />
+
+      {editing && (
+        <Modal open onOpenChange={(v) => !v && setEditing(null)}>
+          <ModalContent title={`Edit ${editing.name}`} size="lg">
+            <DepartmentForm
+              submitLabel="Save changes"
+              defaultValues={{
+                name: editing.name,
+                code: editing.code,
+                departmentType: editing.departmentType as DepartmentInput["departmentType"],
+                headStaffId: editing.head?.id ?? undefined,
+                description: editing.description ?? undefined,
+                campusId: editing.campus?.id ?? undefined,
+                email: editing.email ?? undefined,
+                phone: editing.phone ?? undefined,
+                status: editing.status as DepartmentInput["status"],
+              }}
+              onSubmit={async (input) => {
+                await departmentService.update(editing.id, input);
+                toast({ title: "Department updated", variant: "success" });
+                setEditing(null);
+                setReloadKey((k) => k + 1);
+              }}
+            />
+          </ModalContent>
+        </Modal>
       )}
     </div>
   );

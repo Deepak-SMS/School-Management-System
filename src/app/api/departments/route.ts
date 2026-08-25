@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentSchoolId } from "@/lib/tenant";
+import { requirePermission } from "@/lib/authorize";
 import { departmentInputSchema, DEPARTMENT_DEFAULTS } from "@/lib/validation/department";
 import { cleanEmptyStrings } from "@/lib/validation/shared";
 import { recordAudit } from "@/lib/audit";
@@ -8,7 +8,8 @@ import { apiError } from "@/lib/api-error";
 import type { Prisma } from "@/generated/prisma/client";
 
 export async function GET(request: NextRequest) {
-  const schoolId = await getCurrentSchoolId();
+  try {
+  const { schoolId } = await requirePermission("departments", "view");
   const params = request.nextUrl.searchParams;
   const page = Math.max(1, Number(params.get("page") ?? 1));
   const pageSize = Math.min(100, Math.max(1, Number(params.get("pageSize") ?? 20)));
@@ -47,11 +48,15 @@ export async function GET(request: NextRequest) {
   );
 
   return NextResponse.json({ data, total, page, pageSize });
+  } catch (error) {
+    return apiError(error);
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const schoolId = await getCurrentSchoolId();
+    const user = await requirePermission("departments", "create");
+    const { schoolId } = user;
     const body = await request.json();
     const input = cleanEmptyStrings(departmentInputSchema.parse(body));
 
@@ -70,7 +75,14 @@ export async function POST(request: NextRequest) {
           status: input.status ?? DEPARTMENT_DEFAULTS.status,
         },
       });
-      await recordAudit(tx, { schoolId, action: "department.create", entityType: "Department", entityId: created.id, after: created });
+      await recordAudit(tx, {
+        schoolId,
+        userId: user.id,
+        action: "department.create",
+        entityType: "Department",
+        entityId: created.id,
+        after: created,
+      });
       return created;
     });
 
