@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BLOOD_GROUPS, GENDERS } from "@/lib/constants/people";
+import { studentInputSchema } from "./student";
 
 /**
  * What a parent may submit through the public admission form.
@@ -93,23 +94,23 @@ export const publicRegistrationSchema = z.object({
 
 export type PublicRegistrationInput = z.infer<typeof publicRegistrationSchema>;
 
-/** Staff decision on a submission. */
-export const registrationReviewSchema = z
-  .object({
-    action: z.enum(["approve", "reject"]),
-    reviewNote: z.string().trim().max(1000).optional(),
-    // Supplied on approval — the school's own decisions, not the parent's.
-    admissionNumber: z.string().trim().max(50).optional(),
-    academicYearId: z.string().trim().optional(),
-    classId: z.string().trim().optional(),
-    sectionId: z.string().trim().optional(),
-    rollNumber: optionalString,
-  })
-  .refine((v) => v.action !== "approve" || Boolean(v.admissionNumber && v.academicYearId && v.classId), {
-    message: "Admission number, academic year and class are required to approve a submission",
-    path: ["admissionNumber"],
-  })
-  .refine((v) => v.action !== "reject" || Boolean(v.reviewNote), {
-    message: "A reason is required when rejecting a submission",
-    path: ["reviewNote"],
-  });
+/**
+ * Staff decision on a submission.
+ *
+ * Approving one is now the same act as filling in the "Add student" form —
+ * the reviewer completes/edits the full student record (studentInputSchema),
+ * so a student created via admission approval is built identically to one
+ * added directly. Rejecting only ever needs a reason.
+ */
+export const registrationReviewSchema = z.discriminatedUnion("action", [
+  studentInputSchema.extend({
+    action: z.literal("approve"),
+    reviewNote: optionalText,
+  }),
+  z.object({
+    action: z.literal("reject"),
+    reviewNote: z.string().trim().min(1, "A reason is required when rejecting a submission"),
+  }),
+]);
+
+export type RegistrationReviewInput = z.infer<typeof registrationReviewSchema>;

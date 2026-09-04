@@ -1,11 +1,18 @@
+export interface StudentClassTeacherRef {
+  id: string;
+  fullName: string;
+}
+
 export interface StudentClassRef {
   id: string;
   name: string;
+  classTeacher?: StudentClassTeacherRef | null;
 }
 
 export interface StudentSectionRef {
   id: string;
   name: string;
+  classTeacher?: StudentClassTeacherRef | null;
 }
 
 export interface StudentAcademicYearRef {
@@ -111,6 +118,10 @@ export interface StudentRecord {
   section?: StudentSectionRef | null;
   academicYear: StudentAcademicYearRef;
   guardians?: StudentGuardianRef[];
+  /** List view only: the section's class teacher, falling back to the class's. */
+  classTeacher?: StudentClassTeacherRef | null;
+  /** List view only: the primary guardian's mobile (else the first guardian on file). */
+  parentMobile?: string | null;
   createdAt: string;
   updatedAt: string;
 }

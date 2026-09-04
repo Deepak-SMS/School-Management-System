@@ -75,19 +75,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const studentName = [input.firstName, input.middleName, input.lastName].filter(Boolean).join(" ");
     const primaryGuardian = input.guardians.find((g) => g.isPrimary) ?? input.guardians[0];
 
-    const submission = await prisma.studentRegistration.create({
-      data: {
-        schoolId: form.schoolId,
-        formId: form.id,
-        // The answers are kept verbatim as JSON. They are untrusted input and are
-        // only mapped onto real records when a staff member approves them.
-        payloadJson: JSON.stringify(input),
-        status: "pending",
-        studentName,
-        contactPhone: input.primaryMobile ?? primaryGuardian?.mobile ?? null,
-        contactEmail: input.parentEmail ?? primaryGuardian?.email ?? null,
-      },
-      select: { id: true, submittedAt: true },
+    const submission = await prisma.$transaction(async (tx) => {
+      const created = await tx.studentRegistration.create({
+        data: {
+          schoolId: form.schoolId,
+          formId: form.id,
+          // The answers are kept verbatim as JSON. They are untrusted input and are
+          // only mapped onto real records when a staff member approves them.
+          payloadJson: JSON.stringify(input),
+          status: "pending",
+          studentName,
+          contactPhone: input.primaryMobile ?? primaryGuardian?.mobile ?? null,
+          contactEmail: input.parentEmail ?? primaryGuardian?.email ?? null,
+          enquiryId: form.enquiryId,
+        },
+        select: { id: true, submittedAt: true },
+      });
+
+      // A link generated from an Enquiry's "Generate application link" action
+      // carries its provenance here — once a submission actually arrives, the
+      // enquiry is done being a lead and becomes an application.
+      if (form.enquiryId) {
+        await tx.admissionEnquiry.update({ where: { id: form.enquiryId }, data: { status: "converted" } });
+      }
+
+      return created;
     });
 
     return NextResponse.json(

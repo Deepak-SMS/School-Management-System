@@ -59,6 +59,33 @@ export async function recordStaffActivity(
   });
 }
 
+interface RecordPlatformAuditInput {
+  actorUserId: string;
+  action: string;
+  targetSchoolId?: string | null;
+  metadata?: unknown;
+}
+
+/**
+ * Writes a PlatformAuditLog row for a Super Admin action (create school,
+ * change status, toggle modules). Separate from recordAudit()/AuditLog,
+ * which is hard schoolId-scoped — these actions target the schools
+ * themselves, not records inside one school.
+ */
+export async function recordPlatformAudit(
+  tx: Prisma.TransactionClient,
+  { actorUserId, action, targetSchoolId, metadata }: RecordPlatformAuditInput,
+): Promise<void> {
+  await tx.platformAuditLog.create({
+    data: {
+      actorUserId,
+      action,
+      targetSchoolId: targetSchoolId ?? undefined,
+      metadataJson: metadata !== undefined ? JSON.stringify(metadata) : undefined,
+    },
+  });
+}
+
 /**
  * Describes a field change in the "X changed from A to B" form used by both the
  * audit metadata and the activity timeline.

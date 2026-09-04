@@ -2,15 +2,18 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { GraduationCap, BookOpen, Layers, School, Users, UserCog, CheckCircle2 } from "lucide-react";
+import { BookOpen, Layers, School, Users, UserCog, CheckCircle2 } from "lucide-react";
 import { academicYearService } from "@/services/academicYearService";
 import { classService } from "@/services/classService";
 import { sectionService } from "@/services/sectionService";
 import { subjectService } from "@/services/subjectService";
+import { AcademicYearForm } from "@/features/academic-years/academic-year-form";
+import type { AcademicYearInput } from "@/lib/validation/academicYear";
 import type { AcademicYearRecord } from "@/types/academicYear";
 import type { ClassRecord } from "@/types/class";
 import type { SectionRecord } from "@/types/section";
 import type { SubjectRecord } from "@/types/subject";
+import { useCan } from "@/hooks/use-can";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,14 +32,40 @@ const statusVariant: Record<string, "success" | "neutral" | "warning" | "danger"
   archived: "neutral",
 };
 
+function toDefaultValues(year: AcademicYearRecord): Partial<AcademicYearInput> {
+  return {
+    label: year.label,
+    status: year.status as AcademicYearInput["status"],
+    startDate: year.startDate.slice(0, 10),
+    endDate: year.endDate.slice(0, 10),
+    admissionStartDate: year.admissionStartDate?.slice(0, 10) ?? undefined,
+    admissionEndDate: year.admissionEndDate?.slice(0, 10) ?? undefined,
+    promotionDate: year.promotionDate?.slice(0, 10) ?? undefined,
+    resultPublicationDate: year.resultPublicationDate?.slice(0, 10) ?? undefined,
+  };
+}
+
 export default function AcademicYearDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const can = useCan();
+  const canEdit = can("academicYears", "edit");
   const [year, setYear] = useState<AcademicYearRecord | null>(null);
   const [classes, setClasses] = useState<ClassRecord[] | null>(null);
   const [sections, setSections] = useState<SectionRecord[] | null>(null);
   const [subjects, setSubjects] = useState<SubjectRecord[] | null>(null);
   const [error, setError] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [activeTab, setActiveTab] = useState("classes");
+
+  // Lets the "Edit" action on the academic years table jump straight to this
+  // tab (?tab=settings) without needing useSearchParams()/a Suspense boundary.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    if (tab !== "settings") return;
+    const timeout = setTimeout(() => setActiveTab("settings"), 0);
+    return () => clearTimeout(timeout);
+  }, []);
 
   function load() {
     academicYearService.get(id).then(setYear).catch(() => setError(true));
@@ -98,7 +127,7 @@ export default function AcademicYearDetailPage({ params }: { params: Promise<{ i
         <StatCard label="Teachers" value={year.counts?.teachers ?? 0} icon={UserCog} />
       </div>
 
-      <Tabs defaultValue="classes">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="classes">Classes</TabsTrigger>
           <TabsTrigger value="sections">Sections</TabsTrigger>
@@ -207,11 +236,28 @@ export default function AcademicYearDetailPage({ params }: { params: Promise<{ i
           )}
         </TabsContent>
 
-        <TabsContent value="settings" className="flex flex-col gap-3 text-sm sm:grid sm:grid-cols-2">
-          <Field label="Admission start date" value={year.admissionStartDate?.slice(0, 10)} />
-          <Field label="Admission end date" value={year.admissionEndDate?.slice(0, 10)} />
-          <Field label="Promotion date" value={year.promotionDate?.slice(0, 10)} />
-          <Field label="Result publication date" value={year.resultPublicationDate?.slice(0, 10)} />
+        <TabsContent value="settings">
+          {canEdit ? (
+            <AcademicYearForm
+              key={`${year.id}-${year.status}`}
+              defaultValues={toDefaultValues(year)}
+              submitLabel="Save changes"
+              onSubmit={async (input) => {
+                const updated = await academicYearService.update(id, input);
+                setYear(updated);
+                toast({ title: "Academic year updated", variant: "success" });
+              }}
+            />
+          ) : (
+            <div className="flex flex-col gap-3 text-sm sm:grid sm:grid-cols-2">
+              <Field label="Start date" value={year.startDate.slice(0, 10)} />
+              <Field label="End date" value={year.endDate.slice(0, 10)} />
+              <Field label="Admission start date" value={year.admissionStartDate?.slice(0, 10)} />
+              <Field label="Admission end date" value={year.admissionEndDate?.slice(0, 10)} />
+              <Field label="Promotion date" value={year.promotionDate?.slice(0, 10)} />
+              <Field label="Result publication date" value={year.resultPublicationDate?.slice(0, 10)} />
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

@@ -20,6 +20,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       class: { select: { id: true, name: true } },
       section: { select: { id: true, name: true } },
       teacher: { select: { id: true, fullName: true } },
+      preferredRoom: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -62,10 +63,20 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     const existing = await prisma.subject.findFirst({ where: { id, schoolId } });
     if (!existing) return NextResponse.json({ error: "Subject not found." }, { status: 404 });
 
-    const assignments = await prisma.subjectAssignment.count({ where: { subjectId: id } });
-    if (assignments > 0) {
+    // SubjectAssignment cascades on delete, so it alone wouldn't block this —
+    // but Attendance, LibraryBook, and TimetableSlot all reference Subject
+    // without cascading, and a subject can pick up a TimetableSlot/Attendance
+    // row without ever having a formal SubjectAssignment. Checking all four
+    // up front gives an honest, specific message instead of a raw FK failure.
+    const [assignments, attendanceRecords, libraryBooks, timetableSlots] = await Promise.all([
+      prisma.subjectAssignment.count({ where: { subjectId: id } }),
+      prisma.attendance.count({ where: { subjectId: id } }),
+      prisma.libraryBook.count({ where: { subjectId: id } }),
+      prisma.timetableSlot.count({ where: { subjectId: id } }),
+    ]);
+    if (assignments > 0 || attendanceRecords > 0 || libraryBooks > 0 || timetableSlots > 0) {
       return NextResponse.json(
-        { error: "This subject is assigned to one or more classes. Deactivate it instead of deleting." },
+        { error: "This subject is in use (assigned to a class, a timetable, attendance records, or library books). Deactivate it instead of deleting." },
         { status: 409 },
       );
     }

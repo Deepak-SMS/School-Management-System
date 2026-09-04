@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
 import type { RequestUser } from "@/lib/current-user";
 import { canViewSensitivePay } from "@/config/permissions";
 import {
@@ -76,6 +77,54 @@ function bool(value: boolean | null | undefined): string {
 
 function text(value: string | null | undefined): string {
   return value ?? "";
+}
+
+type StudentWithRelations = Prisma.StudentGetPayload<{ include: { class: true; section: true; academicYear: true } }>;
+
+/**
+ * Shared by the whole-database export (below) and the class/section-scoped
+ * export on the Student Accounts page (src/app/api/students/accounts/export)
+ * — one row shape however the query that produced it was filtered.
+ */
+export function shapeStudentRow(s: StudentWithRelations): DatasetRow {
+  return {
+    admissionNumber: s.admissionNumber,
+    enrollmentNumber: text(s.enrollmentNumber),
+    firstName: s.firstName,
+    middleName: text(s.middleName),
+    lastName: s.lastName,
+    dateOfBirth: date(s.dateOfBirth),
+    gender: text(s.gender),
+    bloodGroup: text(s.bloodGroup),
+    nationality: text(s.nationality),
+    motherTongue: text(s.motherTongue),
+    academicYear: s.academicYear.label,
+    class: s.class.name,
+    section: text(s.section?.name),
+    rollNumber: text(s.rollNumber),
+    house: text(s.house),
+    stream: text(s.stream),
+    medium: text(s.medium),
+    admissionDate: date(s.admissionDate),
+    admissionType: text(s.admissionType),
+    previousSchool: text(s.previousSchool),
+    previousClass: text(s.previousClass),
+    status: s.status,
+    address: text(s.address),
+    city: text(s.city),
+    district: text(s.district),
+    state: text(s.state),
+    country: text(s.country),
+    pinCode: text(s.pinCode),
+    primaryMobile: text(s.primaryMobile),
+    parentEmail: text(s.parentEmail),
+    emergencyName: text(s.emergencyName),
+    emergencyRelation: text(s.emergencyRelation),
+    emergencyContact: text(s.emergencyContact),
+    busNumber: text(s.busNumber),
+    route: text(s.route),
+    pickupPoint: text(s.pickupPoint),
+  };
 }
 
 export const DATASETS: Dataset[] = [
@@ -514,46 +563,9 @@ export const DATASETS: Dataset[] = [
       const rows = await prisma.student.findMany({
         where: { schoolId },
         include: { class: true, section: true, academicYear: true },
-        orderBy: { admissionNumber: "asc" },
+        orderBy: [{ class: { sortOrder: "asc" } }, { section: { name: "asc" } }, { admissionNumber: "asc" }],
       });
-      return rows.map((s) => ({
-        admissionNumber: s.admissionNumber,
-        enrollmentNumber: text(s.enrollmentNumber),
-        firstName: s.firstName,
-        middleName: text(s.middleName),
-        lastName: s.lastName,
-        dateOfBirth: date(s.dateOfBirth),
-        gender: text(s.gender),
-        bloodGroup: text(s.bloodGroup),
-        nationality: text(s.nationality),
-        motherTongue: text(s.motherTongue),
-        academicYear: s.academicYear.label,
-        class: s.class.name,
-        section: text(s.section?.name),
-        rollNumber: text(s.rollNumber),
-        house: text(s.house),
-        stream: text(s.stream),
-        medium: text(s.medium),
-        admissionDate: date(s.admissionDate),
-        admissionType: text(s.admissionType),
-        previousSchool: text(s.previousSchool),
-        previousClass: text(s.previousClass),
-        status: s.status,
-        address: text(s.address),
-        city: text(s.city),
-        district: text(s.district),
-        state: text(s.state),
-        country: text(s.country),
-        pinCode: text(s.pinCode),
-        primaryMobile: text(s.primaryMobile),
-        parentEmail: text(s.parentEmail),
-        emergencyName: text(s.emergencyName),
-        emergencyRelation: text(s.emergencyRelation),
-        emergencyContact: text(s.emergencyContact),
-        busNumber: text(s.busNumber),
-        route: text(s.route),
-        pickupPoint: text(s.pickupPoint),
-      }));
+      return rows.map(shapeStudentRow);
     },
   },
 

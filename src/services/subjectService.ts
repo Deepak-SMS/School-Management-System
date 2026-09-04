@@ -1,4 +1,4 @@
-import type { SubjectInput, SubjectAssignmentInput } from "@/lib/validation/subject";
+import type { SubjectInput, SubjectAssignmentInput, SubjectBulkAssignmentInput } from "@/lib/validation/subject";
 import type { SubjectAssignmentRecord, SubjectListResponse, SubjectRecord } from "@/types/subject";
 import type { ApiError } from "@/services/studentService";
 
@@ -73,5 +73,31 @@ export const subjectService = {
   async unassign(subjectId: string, assignmentId: string): Promise<void> {
     const response = await fetch(`/api/subjects/${subjectId}/assignments/${assignmentId}`, { method: "DELETE" });
     await parseOrThrow(response);
+  },
+
+  /** Changes, or clears (pass null), which teacher is on an existing assignment. */
+  async updateAssignmentTeacher(
+    subjectId: string,
+    assignmentId: string,
+    teacherId: string | null,
+  ): Promise<SubjectAssignmentRecord> {
+    const response = await fetch(`/api/subjects/${subjectId}/assignments/${assignmentId}/teacher`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teacherId }),
+    });
+    return parseOrThrow<SubjectAssignmentRecord>(response);
+  },
+
+  async bulkAssign(
+    subjectId: string,
+    input: SubjectBulkAssignmentInput,
+  ): Promise<{ created: SubjectAssignmentRecord[]; createdCount: number; skippedCount: number }> {
+    const response = await fetch(`/api/subjects/${subjectId}/assignments/bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    return parseOrThrow(response);
   },
 };

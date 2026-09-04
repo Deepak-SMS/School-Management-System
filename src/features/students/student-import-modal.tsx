@@ -152,7 +152,7 @@ export function StudentImportModal({
     >
       <ModalContent
         title="Import students"
-        description="Upload the filled-in CSV template. Nothing is saved until you confirm."
+        description="Upload the filled-in Excel template. Nothing is saved until you confirm."
         size="xl"
       >
         <div className="flex flex-col gap-4">
@@ -161,7 +161,7 @@ export function StudentImportModal({
           {step === "upload" && (
             <>
               <Alert variant="info">
-                Use the CSV template so the columns match. Class and section names must already exist in your school.
+                Use the Excel template so the columns match. Class and section names must already exist in your school.
               </Alert>
 
               <FormField label="Academic year" required description="Every imported student is enrolled into this year">
@@ -182,8 +182,15 @@ export function StudentImportModal({
                 )}
               </FormField>
 
-              <FormField label="CSV file" required description="Up to 5 MB and 2000 rows">
-                {(f) => <Input {...f} ref={fileRef} type="file" accept=".csv,text/csv" />}
+              <FormField label="Excel file" required description="Up to 5 MB and 2000 rows — .xlsx or .csv">
+                {(f) => (
+                  <Input
+                    {...f}
+                    ref={fileRef}
+                    type="file"
+                    accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                  />
+                )}
               </FormField>
 
               <div className="flex justify-end gap-2">

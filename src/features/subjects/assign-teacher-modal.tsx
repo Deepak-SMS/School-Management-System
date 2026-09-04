@@ -288,7 +288,8 @@ export function AssignTeacherModal({
   );
 }
 
-function ScopeButton({
+/** Shared with AssignTeacherToClassModal (src/features/subjects/assign-teacher-to-class-modal.tsx). */
+export function ScopeButton({
   active,
   onClick,
   children,

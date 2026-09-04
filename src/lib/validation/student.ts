@@ -19,6 +19,12 @@ const optionalEmail = z
   .optional()
   .refine((v) => !v || z.string().email().safeParse(v).success, "Invalid email address");
 
+const requiredEmail = z
+  .string()
+  .trim()
+  .min(1, "Email is required")
+  .refine((v) => z.string().email().safeParse(v).success, "Invalid email address");
+
 const optionalDate = z
   .string()
   .trim()
@@ -118,8 +124,8 @@ export const studentInputSchema = z.object({
   // --- Contact ---
   primaryMobile: optionalPhone,
   secondaryMobile: optionalPhone,
-  studentEmail: optionalEmail,
-  parentEmail: optionalEmail,
+  studentEmail: requiredEmail,
+  parentEmail: requiredEmail,
   whatsappNumber: optionalPhone,
 
   // --- Emergency ---
@@ -143,6 +149,16 @@ export const studentInputSchema = z.object({
 });
 
 export type StudentInput = z.infer<typeof studentInputSchema>;
+
+/**
+ * Same shape as studentInputSchema, but the contact emails stay optional.
+ * Used by the edit form/route so an existing student saved before these
+ * became required isn't blocked from saving unrelated changes.
+ */
+export const studentEditInputSchema = studentInputSchema.extend({
+  studentEmail: optionalEmail,
+  parentEmail: optionalEmail,
+});
 
 /** Applied by the create route; deliberately not a schema default, which would fire under `.partial()`. */
 export const DEFAULT_STUDENT_STATUS = "active";

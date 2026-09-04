@@ -46,6 +46,12 @@ export function SchoolProfileForm({ profile, onSubmit, onCancel }: SchoolProfile
       shortName: profile.shortName,
       registrationNumber: profile.registrationNumber ?? undefined,
       affiliationBoard: profile.affiliationBoard ?? undefined,
+      udisePlusCode: profile.udisePlusCode ?? undefined,
+      udiseSchoolId: profile.udiseSchoolId ?? undefined,
+      boardAffiliationNumber: profile.boardAffiliationNumber ?? undefined,
+      recognitionNumber: profile.recognitionNumber ?? undefined,
+      rteRegistrationNumber: profile.rteRegistrationNumber ?? undefined,
+      nocNumber: profile.nocNumber ?? undefined,
       schoolType: profile.schoolType as SchoolProfileInput["schoolType"],
       institutionType: profile.institutionType as SchoolProfileInput["institutionType"],
       establishedYear: profile.establishedYear ?? undefined,
@@ -170,6 +176,35 @@ export function SchoolProfileForm({ profile, onSubmit, onCancel }: SchoolProfile
           </FormField>
           <FormField label="Established year" error={errors.establishedYear?.message}>
             {(field) => <Input {...field} {...register("establishedYear")} type="number" min={1800} max={2100} />}
+          </FormField>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Government &amp; Board IDs</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <FormField label="UDISE+ Code" required error={errors.udisePlusCode?.message}>
+            {(field) => <Input {...field} {...register("udisePlusCode", { required: "UDISE+ Code is required" })} placeholder="27060100101" />}
+          </FormField>
+          <FormField label="UDISE School ID" required error={errors.udiseSchoolId?.message}>
+            {(field) => <Input {...field} {...register("udiseSchoolId", { required: "UDISE School ID is required" })} />}
+          </FormField>
+          <FormField label="Recognition Number" required error={errors.recognitionNumber?.message}>
+            {(field) => <Input {...field} {...register("recognitionNumber", { required: "Recognition number is required" })} />}
+          </FormField>
+          <FormField label="Board Affiliation Number" error={errors.boardAffiliationNumber?.message}>
+            {(field) => <Input {...field} {...register("boardAffiliationNumber")} placeholder="Required if affiliated to a board" />}
+          </FormField>
+          <FormField label="School Code" error={errors.schoolCode?.message}>
+            {(field) => <Input {...field} {...register("schoolCode")} placeholder="Required if issued by your board" />}
+          </FormField>
+          <FormField label="RTE Recognition / Registration No." error={errors.rteRegistrationNumber?.message}>
+            {(field) => <Input {...field} {...register("rteRegistrationNumber")} placeholder="Required for RTE-recognized schools" />}
+          </FormField>
+          <FormField label="NOC Number" error={errors.nocNumber?.message}>
+            {(field) => <Input {...field} {...register("nocNumber")} placeholder="Required if a state NOC was issued" />}
           </FormField>
         </CardContent>
       </Card>

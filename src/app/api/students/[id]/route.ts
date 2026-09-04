@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/authorize";
 import { studentInputSchema, cleanEmptyStrings } from "@/lib/validation/student";
 import { buildStudentGuardianCreates } from "@/lib/students/guardian-input";
+import { assertAdmissionNumberAvailable } from "@/lib/students/admission-number";
 import { recordAudit } from "@/lib/audit";
 import { apiError } from "@/lib/api-error";
 
@@ -38,6 +39,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const existing = await prisma.student.findFirst({ where: { id, schoolId } });
     if (!existing) return NextResponse.json({ error: "Student not found." }, { status: 404 });
+
+    if (input.admissionNumber !== undefined && input.admissionNumber !== existing.admissionNumber) {
+      await assertAdmissionNumberAvailable(schoolId, input.admissionNumber, id);
+    }
 
     // A section must belong to whichever class the student will be in after this
     // edit, not the one they were in before.

@@ -17,10 +17,13 @@ const PERMISSION_BY_KIND: Partial<Record<UploadKind, [PermissionModule, Permissi
   staff_document: ["employeeDocuments", "create"],
   student_document: ["students", "edit"],
   school_document: ["schoolProfile", "edit"],
+  expense_document: ["expenses", "create"],
   candidate_photo: ["candidates", "edit"],
   candidate_resume: ["candidates", "create"],
   candidate_document: ["candidates", "create"],
   import_excel: ["employees", "import"],
+  library_book_cover: ["libraryCatalogue", "create"],
+  certificate_background: ["certificateTypes", "edit"],
 };
 
 function isUploadKind(value: string): value is UploadKind {

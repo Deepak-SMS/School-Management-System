@@ -1,4 +1,6 @@
 import { BLOOD_GROUPS, GENDERS, STUDENT_STATUSES } from "@/lib/constants/people";
+import { buildWorkbook, readWorkbook } from "@/lib/database/workbook";
+import type { Dataset } from "@/lib/database/datasets";
 
 /**
  * Student bulk import.
@@ -86,33 +88,39 @@ export const IMPORT_COLUMNS: ImportColumn[] = [
 const PHONE_RE = /^[0-9+\-\s()]{7,20}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Builds the downloadable template: a header row, one example row, and a notes block. */
-export function buildImportTemplate(): string {
-  const headers = IMPORT_COLUMNS.map((c) => c.header);
-  const example = IMPORT_COLUMNS.map((c) => c.example);
+/**
+ * The template/importer's dataset registration — reuses the same
+ * `buildWorkbook`/`readWorkbook` engine the whole-database Excel import uses
+ * (src/lib/database/workbook.ts), rather than hand-rolling a second Excel
+ * reader/writer just for students. `count`/`load` are never called here (the
+ * whole-database Export/commit flow is what uses those); they exist only to
+ * satisfy the shared `Dataset` shape.
+ */
+const STUDENT_IMPORT_DATASET: Dataset = {
+  key: "students",
+  label: "Students",
+  description: "Student roster — one row per student to create.",
+  importable: true,
+  columns: IMPORT_COLUMNS,
+  count: async () => 0,
+  load: async () => [],
+};
 
-  // Guidance rows start with "#" so the parser can skip them — administrators
-  // routinely leave them in the file they upload back.
-  const notes: string[][] = [
-    [],
-    ["# INSTRUCTIONS — delete these lines (and the example row) before importing, or leave them; rows starting with # are ignored."],
-    [`# Required columns: ${IMPORT_COLUMNS.filter((c) => c.required).map((c) => c.header).join(", ")}`],
-    ["# Dates must be YYYY-MM-DD."],
-  ];
-  for (const col of IMPORT_COLUMNS) {
-    if (col.allowed) notes.push([`# ${col.header}: one of ${col.allowed.join(" | ")}`]);
-    else if (col.hint) notes.push([`# ${col.header}: ${col.hint}`]);
-  }
-
-  return [headers, example, ...notes].map(toCsvRow).join("\r\n");
-}
-
-function escapeCell(value: string): string {
-  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
-
-function toCsvRow(cells: string[]): string {
-  return cells.map((c) => escapeCell(c ?? "")).join(",");
+/** Builds the downloadable .xlsx import template: header row, one example row, and a Read Me sheet. */
+export async function buildImportWorkbook(): Promise<Buffer> {
+  const example = Object.fromEntries(IMPORT_COLUMNS.map((c) => [c.field, c.example]));
+  return buildWorkbook(
+    [{ dataset: STUDENT_IMPORT_DATASET, columns: IMPORT_COLUMNS, rows: [example] }],
+    {
+      title: "Student Import Template",
+      notes: [
+        "One row per student. Replace the example row with your own data, or leave it — it will simply be skipped as a duplicate admission number.",
+        "Columns shown in blue are required.",
+        'Class and Section must already exist in your school — use the name shown there (e.g. "Class 6"), not an id.',
+      ],
+      includeCounts: false,
+    },
+  );
 }
 
 /**
@@ -197,10 +205,19 @@ export interface ParseResult {
   errors: RowError[];
 }
 
+/** Matches a file's header text against IMPORT_COLUMNS — shared by both the CSV and Excel parsers below, so a column can never be recognised by one and not the other. */
+function resolveHeaders(headers: string[]) {
+  const byHeader = new Map(IMPORT_COLUMNS.map((c) => [c.header.toLowerCase(), c]));
+  const columnFor: (ImportColumn | null)[] = headers.map((h) => byHeader.get(h.trim().toLowerCase()) ?? null);
+  const unknownHeaders = headers.filter((h, i) => h.trim() !== "" && !columnFor[i]);
+  const presentFields = new Set(columnFor.filter(Boolean).map((c) => c!.field));
+  const missingHeaders = IMPORT_COLUMNS.filter((c) => c.required && !presentFields.has(c.field)).map((c) => c.header);
+  return { columnFor, unknownHeaders, missingHeaders };
+}
+
 /** Maps the file's header row onto known fields and extracts data rows. */
 export function extractRows(text: string): ParseResult {
   const raw = parseCsv(text);
-  const errors: RowError[] = [];
 
   const headerRowIndex = raw.findIndex((r) => r.some((c) => c.trim() !== "" && !c.trim().startsWith("#")));
   if (headerRowIndex === -1) {
@@ -208,12 +225,7 @@ export function extractRows(text: string): ParseResult {
   }
 
   const headers = raw[headerRowIndex].map((h) => h.trim());
-  const byHeader = new Map(IMPORT_COLUMNS.map((c) => [c.header.toLowerCase(), c]));
-
-  const columnFor: (ImportColumn | null)[] = headers.map((h) => byHeader.get(h.toLowerCase()) ?? null);
-  const unknownHeaders = headers.filter((h, i) => h !== "" && !columnFor[i]);
-  const presentFields = new Set(columnFor.filter(Boolean).map((c) => c!.field));
-  const missingHeaders = IMPORT_COLUMNS.filter((c) => c.required && !presentFields.has(c.field)).map((c) => c.header);
+  const { columnFor, unknownHeaders, missingHeaders } = resolveHeaders(headers);
 
   const rows: ParsedRow[] = [];
   for (let i = headerRowIndex + 1; i < raw.length; i++) {
@@ -233,7 +245,35 @@ export function extractRows(text: string): ParseResult {
     rows.push({ lineNumber, values });
   }
 
-  return { rows, unknownHeaders, missingHeaders, errors };
+  return { rows, unknownHeaders, missingHeaders, errors: [] };
+}
+
+/**
+ * Parses an uploaded .xlsx workbook the same way extractRows() parses CSV —
+ * same header matching, same ParsedRow shape — so the rest of the import
+ * pipeline (validateRow, the review UI, /commit) doesn't care which format
+ * the file came in as. Reads the first data sheet in the workbook; readWorkbook()
+ * already skips a "Read Me" sheet if the file came from our own template.
+ */
+export async function extractRowsFromWorkbook(buffer: Buffer): Promise<ParseResult> {
+  const sheets = await readWorkbook(buffer);
+  const sheet = sheets[0];
+  if (!sheet) {
+    return { rows: [], unknownHeaders: [], missingHeaders: [], errors: [{ lineNumber: 1, message: "The workbook has no data rows." }] };
+  }
+
+  const { columnFor, unknownHeaders, missingHeaders } = resolveHeaders(sheet.headers);
+
+  const rows: ParsedRow[] = sheet.rows.map((r) => {
+    const values: Record<string, string> = {};
+    sheet.headers.forEach((header, i) => {
+      const col = columnFor[i];
+      if (col) values[col.field] = r.values[header] ?? "";
+    });
+    return { lineNumber: r.rowNumber, values };
+  });
+
+  return { rows, unknownHeaders, missingHeaders, errors: [] };
 }
 
 export interface ValidationContext {

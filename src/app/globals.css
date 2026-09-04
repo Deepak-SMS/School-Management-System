@@ -173,3 +173,28 @@ body {
     transform: translateY(0) scale(1);
   }
 }
+
+/** Entrance for the login card and its branding panel — see src/app/login/page.tsx. */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/** Slow ambient drift behind the login branding panel — never disorienting, just alive. */
+@keyframes drift {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-2%, 2%) scale(1.05);
+  }
+  to {
+    transform: translate(0, 0) scale(1);
+  }
+}

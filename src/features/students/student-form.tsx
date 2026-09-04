@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm, Controller, useFieldArray, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
-import { Check, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
-import { studentInputSchema, type StudentInput } from "@/lib/validation/student";
+import { Check, ChevronLeft, ChevronRight, Plus, Trash2, Wand2 } from "lucide-react";
+import { studentInputSchema, studentEditInputSchema, type StudentInput } from "@/lib/validation/student";
+import { studentService } from "@/services/studentService";
 import { BLOOD_GROUPS, GENDERS, STUDENT_STATUSES } from "@/lib/constants/people";
 import {
   ADMISSION_TYPES,
@@ -89,18 +90,26 @@ export function StudentForm({
   onSubmit,
   submitLabel = "Add student",
   mode = "create",
+  studentId,
 }: {
   defaultValues?: Partial<StudentInput>;
   onSubmit: (input: StudentInput) => Promise<void>;
   submitLabel?: string;
   mode?: "create" | "edit";
+  /** The record being edited — excluded from the admission-number uniqueness check so it doesn't collide with itself. */
+  studentId?: string;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [structure, setStructure] = useState<SchoolStructure | null>(null);
 
+  const isEdit = mode === "edit";
+
   const form = useForm<StudentFormValues, unknown, StudentInput>({
-    resolver: zodResolver(studentInputSchema),
+    // Contact emails are required when adding a student, but an edit shouldn't
+    // get blocked on unrelated changes for a student saved before that rule
+    // existed — see studentEditInputSchema.
+    resolver: zodResolver(isEdit ? (studentEditInputSchema as unknown as typeof studentInputSchema) : studentInputSchema),
     defaultValues: {
       country: "India",
       sameAsCurrent: true,
@@ -114,6 +123,10 @@ export function StudentForm({
     handleSubmit,
     trigger,
     watch,
+    setValue,
+    getValues,
+    setError,
+    clearErrors,
     formState: { errors, isSubmitting },
   } = form;
 
@@ -121,12 +134,42 @@ export function StudentForm({
     schoolStructureService.get().then(setStructure).catch(() => undefined);
   }, []);
 
-  const isEdit = mode === "edit";
+  // New admissions default to the school's active academic year; an existing
+  // student keeps whichever year is already on their record (defaultValues).
+  useEffect(() => {
+    if (isEdit || !structure) return;
+    const current = structure.academicYears.find((y) => y.isCurrent);
+    if (current) setValue("academicYearId", current.id);
+  }, [structure, isEdit, setValue]);
   const activeStep = STEPS[stepIndex];
   const isLastStep = stepIndex === STEPS.length - 1;
 
+  // Two students in the same school can't share an admission number. Checked
+  // on blur for early feedback (see StudentSection) and re-checked here as the
+  // one place both "Continue" and a direct Save (edit mode) funnel through, so
+  // a stale or skipped check can never let a duplicate slip past.
+  async function isAdmissionNumberAvailable(): Promise<boolean> {
+    const value = getValues("admissionNumber")?.trim();
+    if (!value) return true; // required-field validation already covers this
+    try {
+      const available = await studentService.isAdmissionNumberAvailable(value, studentId);
+      if (!available) {
+        setError("admissionNumber", { type: "manual", message: "This admission number is already in use." });
+        return false;
+      }
+      clearErrors("admissionNumber");
+      return true;
+    } catch {
+      return true; // don't block on a network hiccup — the server still enforces this at save
+    }
+  }
+
   async function handleFormSubmit(values: StudentInput) {
     setServerError(null);
+    if (!(await isAdmissionNumberAvailable())) {
+      setStepIndex(0);
+      return;
+    }
     try {
       await onSubmit(values);
     } catch (error) {
@@ -136,7 +179,9 @@ export function StudentForm({
 
   async function goNext() {
     const valid = await trigger(activeStep.fields as never, { shouldFocus: true });
-    if (valid) setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
+    if (!valid) return;
+    if (activeStep.id === "student" && !(await isAdmissionNumberAvailable())) return;
+    setStepIndex((i) => Math.min(i + 1, STEPS.length - 1));
   }
 
   return (
@@ -151,7 +196,9 @@ export function StudentForm({
           teaches its staff once is the only form they ever see. */}
       <StepIndicator steps={STEPS} current={stepIndex} onSelect={isEdit ? setStepIndex : undefined} />
 
-      {activeStep.id === "student" && <StudentSection form={form} />}
+      {activeStep.id === "student" && (
+        <StudentSection form={form} mode={mode} onCheckAdmissionNumber={isAdmissionNumberAvailable} />
+      )}
       {activeStep.id === "admission" && <AdmissionSection form={form} structure={structure} />}
       {activeStep.id === "parents" && <GuardiansSection form={form} />}
       {activeStep.id === "address" && <AddressSection form={form} watch={watch} />}
@@ -254,12 +301,39 @@ function StepIndicator({
   );
 }
 
-function StudentSection({ form }: { form: Form }) {
+function StudentSection({
+  form,
+  mode,
+  onCheckAdmissionNumber,
+}: {
+  form: Form;
+  mode: "create" | "edit";
+  onCheckAdmissionNumber: () => Promise<boolean>;
+}) {
   const {
     register,
     control,
+    getValues,
+    setValue,
     formState: { errors },
   } = form;
+  const [suggesting, setSuggesting] = useState(false);
+
+  function fillSuggestion() {
+    setSuggesting(true);
+    studentService
+      .suggestAdmissionNumber()
+      .then((suggested) => setValue("admissionNumber", suggested, { shouldValidate: true }))
+      .catch(() => undefined)
+      .finally(() => setSuggesting(false));
+  }
+
+  // A blank "Add student" form starts with a ready-to-use suggested number —
+  // staff can still type their own over it.
+  useEffect(() => {
+    if (mode === "create" && !getValues("admissionNumber")) setTimeout(fillSuggestion, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
 
   return (
     <Card>
@@ -268,7 +342,26 @@ function StudentSection({ form }: { form: Form }) {
       </CardHeader>
       <CardContent className="grid gap-4 sm:grid-cols-2">
         <FormField label="Admission number" required error={errors.admissionNumber?.message}>
-          {(f) => <Input {...f} {...register("admissionNumber")} placeholder="ADM021" />}
+          {(f) => (
+            <div className="flex gap-2">
+              <Input
+                {...f}
+                {...register("admissionNumber", { onBlur: onCheckAdmissionNumber })}
+                placeholder="ADM021"
+                invalid={f.invalid}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="shrink-0"
+                isLoading={suggesting}
+                onClick={fillSuggestion}
+              >
+                <Wand2 className="size-3.5" /> Suggest
+              </Button>
+            </div>
+          )}
         </FormField>
         <FormField label="Student ID" description="Your own enrolment number, if you use one">
           {(f) => <Input {...f} {...register("enrollmentNumber")} />}
@@ -475,7 +568,11 @@ function GuardiansSection({ form }: { form: Form }) {
 }
 
 function AddressSection({ form, watch }: { form: Form; watch: Form["watch"] }) {
-  const { register, control } = form;
+  const {
+    register,
+    control,
+    formState: { errors },
+  } = form;
   const sameAsCurrent = watch("sameAsCurrent");
 
   return (
@@ -523,9 +620,11 @@ function AddressSection({ form, watch }: { form: Form; watch: Form["watch"] }) {
           <FormField label="Primary mobile">{(f) => <Input {...f} {...register("primaryMobile")} />}</FormField>
           <FormField label="Alternate mobile">{(f) => <Input {...f} {...register("secondaryMobile")} />}</FormField>
           <FormField label="WhatsApp number">{(f) => <Input {...f} {...register("whatsappNumber")} />}</FormField>
-          <FormField label="Parent email">{(f) => <Input {...f} type="email" {...register("parentEmail")} />}</FormField>
-          <FormField label="Student email" className="sm:col-span-2">
-            {(f) => <Input {...f} type="email" {...register("studentEmail")} />}
+          <FormField label="Parent email" required error={errors.parentEmail?.message}>
+            {(f) => <Input {...f} type="email" {...register("parentEmail")} invalid={f.invalid} />}
+          </FormField>
+          <FormField label="Student email" required className="sm:col-span-2" error={errors.studentEmail?.message}>
+            {(f) => <Input {...f} type="email" {...register("studentEmail")} invalid={f.invalid} />}
           </FormField>
         </CardContent>
       </Card>

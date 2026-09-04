@@ -31,6 +31,9 @@ model School {
   id                     String   @id @default(cuid())
   name                   String
   shortName              String
+  /// URL-safe identifier for this school's branded login link
+  /// (/{slug}/admin) — derived from shortName at creation, unique platform-wide.
+  slug                   String?  @unique
   address                String?
   city                   String?
   state                  String?
@@ -74,46 +77,131 @@ model School {
   youtubeUrl             String?
   linkedinUrl            String?
   twitterUrl             String?
+  // Platform/subscription lifecycle — set by the Super Admin, not the school itself.
+  /// trial | active | suspended | expired | cancelled
+  status                 String   @default("trial")
+  /// starter | professional | enterprise
+  plan                   String   @default("starter")
+  /// JSON array of PermissionModule keys this school's plan grants; null = unrestricted.
+  /// Stored/displayed only for now — not yet enforced in requirePermission().
+  enabledModulesJson     String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
-  memberships          SchoolMembership[]
-  academicYears        AcademicYear[]
-  classes              Class[]
-  sections             Section[]
-  students             Student[]
-  guardians            Guardian[]
-  studentDocuments     StudentDocument[]
-  schoolDocuments      SchoolDocument[]
-  registrationForms    RegistrationForm[]
-  studentRegistrations StudentRegistration[]
-  staff                Staff[]
-  campuses             Campus[]
-  subjects             Subject[]
-  subjectAssignments   SubjectAssignment[]
-  departments          Department[]
-  designations         Designation[]
-  employeeTypes        EmployeeType[]
-  staffDocuments       StaffDocument[]
-  staffActivityLogs    StaffActivityLog[]
-  staffTransfers       StaffTransfer[]
-  jobPositions         JobPosition[]
-  vacancies            Vacancy[]
-  candidates           Candidate[]
-  applications         Application[]
-  interviews           Interview[]
-  demoClasses          DemoClass[]
-  offers               Offer[]
-  candidateDocuments   CandidateDocument[]
-  idCardTemplates      IDCardTemplate[]
-  idCards              IDCard[]
-  idCardGenerationJobs IDCardGenerationJob[]
-  qrVerifications      QRVerification[]
-  importJobs           ImportJob[]
-  photoMappings        PhotoMapping[]
-  cardReplacements     CardReplacement[]
-  uploadedFiles        UploadedFile[]
-  auditLogs            AuditLog[]
+  memberships              SchoolMembership[]
+  platformAuditLogs        PlatformAuditLog[]
+  academicYears            AcademicYear[]
+  classes                  Class[]
+  sections                 Section[]
+  students                 Student[]
+  guardians                Guardian[]
+  studentDocuments         StudentDocument[]
+  schoolDocuments          SchoolDocument[]
+  registrationForms        RegistrationForm[]
+  studentRegistrations     StudentRegistration[]
+  admissionEnquiries       AdmissionEnquiry[]
+  staff                    Staff[]
+  campuses                 Campus[]
+  subjects                 Subject[]
+  subjectAssignments       SubjectAssignment[]
+  departments              Department[]
+  designations             Designation[]
+  employeeTypes            EmployeeType[]
+  staffDocuments           StaffDocument[]
+  staffActivityLogs        StaffActivityLog[]
+  staffTransfers           StaffTransfer[]
+  jobPositions             JobPosition[]
+  vacancies                Vacancy[]
+  candidates               Candidate[]
+  applications             Application[]
+  interviews               Interview[]
+  demoClasses              DemoClass[]
+  offers                   Offer[]
+  candidateDocuments       CandidateDocument[]
+  idCardTemplates          IDCardTemplate[]
+  idCards                  IDCard[]
+  idCardGenerationJobs     IDCardGenerationJob[]
+  qrVerifications          QRVerification[]
+  importJobs               ImportJob[]
+  photoMappings            PhotoMapping[]
+  cardReplacements         CardReplacement[]
+  certificateTypes         CertificateType[]
+  certificateTemplates     CertificateTemplate[]
+  certificateNumberingSeqs CertificateNumberingSequence[]
+  certificates             Certificate[]
+  certificateVerifications CertificateVerification[]
+  uploadedFiles            UploadedFile[]
+  auditLogs                AuditLog[]
+  attendanceRecords        Attendance[]
+  attendanceLocks          AttendanceLock[]
+  attendanceSettings       AttendanceSettings?
+  feeCategories            FeeCategory[]
+  feeStudentCategories     FeeStudentCategory[]
+  lateFeeRules             LateFeeRule[]
+  feeStructures            FeeStructure[]
+  feeStructureAssignments  FeeStructureAssignment[]
+  studentFeeCharges        StudentFeeCharge[]
+  studentFeeAdjustments    StudentFeeAdjustment[]
+  payments                 Payment[]
+  receipts                 Receipt[]
+  receiptCounters          ReceiptCounter[]
+  expenseCategories        ExpenseCategory[]
+  expenses                 Expense[]
+  holidays                 Holiday[]
+  staffAttendance          StaffAttendance[]
+  attendanceCorrections    AttendanceCorrection[]
+  attendancePeriodLocks    AttendancePeriodLock[]
+  leaveTypes               LeaveType[]
+  leaveBalances            LeaveBalance[]
+  leaveRequests            LeaveRequest[]
+  salaryComponents            SalaryComponent[]
+  salaryStructures             SalaryStructure[]
+  salaryStructureAssignments   SalaryStructureAssignment[]
+  payrollRules                 PayrollRule[]
+  payrollPeriods                PayrollPeriod[]
+  payrollEntries                 PayrollEntry[]
+  salarySlips                     SalarySlip[]
+  salarySlipNumberingSequences   SalarySlipNumberingSequence[]
+  newsCategories           NewsCategory[]
+  news                     News[]
+  notifications            Notification[]
+  libraryCategories        LibraryCategory[]
+  librarySettings          LibrarySettings?
+  libraryBooks             LibraryBook[]
+  libraryBookCopies        LibraryBookCopy[]
+  libraryAccessionCounters LibraryAccessionCounter[]
+  transportVehicles        TransportVehicle[]
+  transportDrivers         TransportDriver[]
+  transportStops           TransportStop[]
+  transportRoutes          TransportRoute[]
+  transportRouteAssignments TransportRouteAssignment[]
+  studentTransports        StudentTransport[]
+  examTypes                 ExamType[]
+  exams                      Exam[]
+  timingSets                TimingSet[]
+  periods                   Period[]
+  rooms                     Room[]
+  teacherUnavailabilities   TeacherUnavailability[]
+  timetables                Timetable[]
+  timetableSlots            TimetableSlot[]
+  aiConversations           AiConversation[]
+  aiMessages                AiMessage[]
+  aiRequests                AiRequest[]
+  aiUsageRecords            AiUsage[]
+  aiAuditLogs               AiAuditLog[]
+  whatsAppAccount           WhatsAppAccount?
+  whatsAppContacts          WhatsAppContact[]
+  whatsAppTemplates         WhatsAppTemplate[]
+  whatsAppCampaigns         WhatsAppCampaign[]
+  whatsAppMessageJobs       WhatsAppMessageJob[]
+  whatsAppChats             WhatsAppChat[]
+  whatsAppChatMessages      WhatsAppChatMessage[]
+  gmailConnection           GmailConnection?
+  emailTemplates            EmailTemplate[]
+  emailCampaigns            EmailCampaign[]
+  emailJobs                 EmailJob[]
+  emailSuppressions         EmailSuppression[]
+  emailCampaignAttachments  EmailCampaignAttachment[]
 }
 
 /// Auth-ready user record. No password/session flow is implemented yet —
@@ -127,12 +215,19 @@ model User {
   isActive           Boolean  @default(true)
   /// Set on account creation/reset so the first login forces a password change.
   mustChangePassword Boolean  @default(false)
+  /// Platform-level access across every tenant — independent of SchoolMembership.
+  /// A Super Admin belongs to zero schools; see src/lib/platform-auth.ts.
+  isSuperAdmin       Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  memberships SchoolMembership[]
-  sessions    Session[]
-  staff       Staff?
+  memberships           SchoolMembership[]
+  sessions              Session[]
+  staff                 Staff?
+  guardian              Guardian?
+  student               Student?
+  certificatesGenerated Certificate[]
+  platformAuditLogs     PlatformAuditLog[]
 }
 
 /// Server-side login session. The cookie carries a random token; only its
@@ -167,6 +262,24 @@ model SchoolMembership {
   @@index([schoolId])
 }
 
+/// Platform-level audit trail for Super Admin actions (creating a school,
+/// changing its status, toggling modules). Separate from `AuditLog`, which is
+/// hard schoolId-scoped — these actions target the schools themselves.
+model PlatformAuditLog {
+  id             String   @id @default(cuid())
+  actorUserId    String
+  action         String
+  targetSchoolId String?
+  metadataJson   String?
+  createdAt      DateTime @default(now())
+
+  actor  User    @relation(fields: [actorUserId], references: [id])
+  school School? @relation(fields: [targetSchoolId], references: [id])
+
+  @@index([actorUserId])
+  @@index([targetSchoolId])
+}
+
 // ---------------------------------------------------------------------------
 // School structure
 // ---------------------------------------------------------------------------
@@ -186,11 +299,16 @@ model AcademicYear {
   status                String    @default("draft")
   createdAt             DateTime  @default(now())
 
-  school      School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  students    Student[]
-  classes     Class[]
-  sections    Section[]
-  assignments SubjectAssignment[]
+  school            School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  students          Student[]
+  classes           Class[]
+  sections          Section[]
+  assignments       SubjectAssignment[]
+  attendanceRecords Attendance[]
+  feeStructures     FeeStructure[]
+  certificates      Certificate[]
+  exams             Exam[]
+  timetables        Timetable[]
 
   @@unique([schoolId, label])
   @@index([schoolId])
@@ -225,7 +343,9 @@ model Campus {
   classes     Class[]
   sections    Section[]
   departments Department[]
+  holidays    Holiday[]
   staff       Staff[]      @relation("StaffCampus")
+  rooms       Room[]
 
   @@unique([schoolId, code])
   @@index([schoolId])
@@ -247,13 +367,20 @@ model Class {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  academicYear       AcademicYear        @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  campus             Campus              @relation(fields: [campusId], references: [id])
-  classTeacher       Staff?              @relation("ClassTeacher", fields: [classTeacherId], references: [id])
-  sections           Section[]
-  students           Student[]
-  subjectAssignments SubjectAssignment[]
+  school              School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYear        AcademicYear         @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  campus              Campus               @relation(fields: [campusId], references: [id])
+  classTeacher        Staff?               @relation("ClassTeacher", fields: [classTeacherId], references: [id])
+  sections            Section[]
+  students            Student[]
+  subjectAssignments  SubjectAssignment[]
+  attendanceRecords   Attendance[]
+  attendanceLocks     AttendanceLock[]
+  admissionEnquiries  AdmissionEnquiry[]
+  feeStructures       FeeStructure[]
+  newsAudienceTargets NewsAudienceTarget[]
+  examClasses         ExamClass[]
+  timetableClasses    TimetableClass[]
 
   @@unique([schoolId, academicYearId, name])
   @@unique([schoolId, academicYearId, code])
@@ -277,13 +404,20 @@ model Section {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  class              Class               @relation(fields: [classId], references: [id], onDelete: Cascade)
-  academicYear       AcademicYear        @relation(fields: [academicYearId], references: [id])
-  campus             Campus              @relation(fields: [campusId], references: [id])
-  classTeacher       Staff?              @relation("SectionTeacher", fields: [classTeacherId], references: [id])
-  students           Student[]
-  subjectAssignments SubjectAssignment[]
+  school              School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  class               Class                @relation(fields: [classId], references: [id], onDelete: Cascade)
+  academicYear        AcademicYear         @relation(fields: [academicYearId], references: [id])
+  campus              Campus               @relation(fields: [campusId], references: [id])
+  classTeacher        Staff?               @relation("SectionTeacher", fields: [classTeacherId], references: [id])
+  students            Student[]
+  subjectAssignments  SubjectAssignment[]
+  attendanceRecords   Attendance[]
+  attendanceLocks     AttendanceLock[]
+  feeStructures       FeeStructure[]
+  newsAudienceTargets NewsAudienceTarget[]
+  examClasses         ExamClass[]
+  timetableClasses    TimetableClass[]
+  timetableSlots      TimetableSlot[]
 
   @@unique([classId, name])
   @@unique([classId, code])
@@ -309,8 +443,12 @@ model Subject {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  school      School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  assignments SubjectAssignment[]
+  school            School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  assignments       SubjectAssignment[]
+  attendanceRecords Attendance[]
+  attendanceLocks   AttendanceLock[]
+  libraryBooks      LibraryBook[]
+  timetableSlots    TimetableSlot[]
 
   @@unique([schoolId, code])
   @@index([schoolId])
@@ -327,6 +465,10 @@ model SubjectAssignment {
   sectionId      String?
   teacherId      String?
   createdAt      DateTime @default(now())
+  /// Timetable module — the generator's workload input. 0 = not yet configured for scheduling.
+  periodsPerWeek     Int     @default(0)
+  preferDoublePeriod Boolean @default(false)
+  preferredRoomId    String?
 
   school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   subject      Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
@@ -334,6 +476,7 @@ model SubjectAssignment {
   class        Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
   section      Section?     @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   teacher      Staff?       @relation(fields: [teacherId], references: [id])
+  preferredRoom Room?       @relation(fields: [preferredRoomId], references: [id])
 
   @@unique([subjectId, academicYearId, classId, sectionId])
   @@index([schoolId])
@@ -424,6 +567,11 @@ model Student {
   religion          String?
   category          String?
   govtIdRef         String?
+  /// Fee-purpose grouping (General, RTE, Staff Ward, Sibling...) — deliberately
+  /// separate from `category` above, which is the caste/reservation category
+  /// collected for board compliance. A billing grouping and a legal one rarely
+  /// line up, so they are not the same field. See FeeStudentCategory.
+  feeCategoryId     String?
   academicYearId    String
   classId           String
   sectionId         String?
@@ -482,20 +630,37 @@ model Student {
   busNumber         String?
   route             String?
   pickupPoint       String?
+  /// The login this student signs in with, once one is granted — same pattern
+  /// as Staff.userId/Guardian.userId. Role/access lives on SchoolMembership.
+  userId            String?   @unique
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  school          School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  academicYear    AcademicYear           @relation(fields: [academicYearId], references: [id])
-  class           Class                  @relation(fields: [classId], references: [id])
-  section         Section?               @relation(fields: [sectionId], references: [id])
-  guardians       StudentGuardian[]
-  documents       StudentDocument[]
-  registration    StudentRegistration?
-  idCards         IDCard[]
-  qrVerification  QRVerification?
-  generationItems IDCardGenerationItem[]
-  photoMappings   PhotoMapping[]
+  school                  School                   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user                    User?                    @relation(fields: [userId], references: [id])
+  academicYear            AcademicYear             @relation(fields: [academicYearId], references: [id])
+  class                   Class                    @relation(fields: [classId], references: [id])
+  section                 Section?                 @relation(fields: [sectionId], references: [id])
+  guardians               StudentGuardian[]
+  documents               StudentDocument[]
+  registration            StudentRegistration?
+  idCards                 IDCard[]
+  qrVerification          QRVerification?
+  generationItems         IDCardGenerationItem[]
+  photoMappings           PhotoMapping[]
+  certificates            Certificate[]
+  attendanceRecords       Attendance[]
+  feeCategory             FeeStudentCategory?      @relation(fields: [feeCategoryId], references: [id])
+  feeStructureAssignments FeeStructureAssignment[]
+  feeCharges              StudentFeeCharge[]
+  payments                Payment[]
+  receipts                Receipt[]
+  feeAdjustments          StudentFeeAdjustment[]   @relation("StudentFeeAdjustments")
+  feeAdjustmentsReceived  StudentFeeAdjustment[]   @relation("StudentFeeAdjustmentTransfers")
+  transportEnrollments    StudentTransport[]
+  whatsAppContacts        WhatsAppContact[]
+  whatsAppMessageJobs     WhatsAppMessageJob[]
+  emailJobs               EmailJob[]
 
   @@unique([schoolId, admissionNumber])
   @@index([schoolId, classId, sectionId])
@@ -569,12 +734,15 @@ model Guardian {
   country         String?
   pinCode         String?
   /// Set once a portal login exists for this guardian.
-  userId          String?
+  userId          String?  @unique
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   school   School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user     User?             @relation(fields: [userId], references: [id])
   students StudentGuardian[]
+  whatsAppContacts    WhatsAppContact[]
+  whatsAppMessageJobs WhatsAppMessageJob[]
 
   @@index([schoolId])
   @@index([schoolId, mobile])
@@ -587,19 +755,19 @@ model Guardian {
 ///
 /// `relationship`: father | mother | guardian | grandparent | sibling | other
 model StudentGuardian {
-  id                   String   @id @default(cuid())
-  studentId            String
-  guardianId           String
-  relationship         String
-  isPrimary            Boolean  @default(false)
-  isEmergencyContact   Boolean  @default(false)
-  isAuthorizedPickup   Boolean  @default(false)
-  isLegalGuardian      Boolean  @default(false)
-  canReceiveAcademic   Boolean  @default(true)
-  canReceiveFee        Boolean  @default(false)
-  canAccessPortal      Boolean  @default(false)
-  sortOrder            Int      @default(0)
-  createdAt            DateTime @default(now())
+  id                 String   @id @default(cuid())
+  studentId          String
+  guardianId         String
+  relationship       String
+  isPrimary          Boolean  @default(false)
+  isEmergencyContact Boolean  @default(false)
+  isAuthorizedPickup Boolean  @default(false)
+  isLegalGuardian    Boolean  @default(false)
+  canReceiveAcademic Boolean  @default(true)
+  canReceiveFee      Boolean  @default(false)
+  canAccessPortal    Boolean  @default(false)
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
 
   student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   guardian Guardian @relation(fields: [guardianId], references: [id], onDelete: Cascade)
@@ -623,13 +791,19 @@ model RegistrationForm {
   isActive       Boolean   @default(true)
   expiresAt      DateTime?
   createdById    String?
+  /// Set when this link was generated from an Admission Enquiry's "Generate
+  /// application link" action, so a resulting submission can carry the
+  /// enquiry's provenance forward (see StudentRegistration.enquiryId).
+  enquiryId      String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  school        School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  submissions   StudentRegistration[]
+  school      School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  enquiry     AdmissionEnquiry?     @relation(fields: [enquiryId], references: [id])
+  submissions StudentRegistration[]
 
   @@index([schoolId, isActive])
+  @@index([enquiryId])
 }
 
 /// One parent-submitted form. Deliberately NOT a Student: submissions are
@@ -652,14 +826,57 @@ model StudentRegistration {
   reviewedById String?
   reviewedAt   DateTime?
   studentId    String?   @unique
+  /// Copied from the source RegistrationForm at submission time, so
+  /// Applications can show "came from enquiry X" without an extra join.
+  enquiryId    String?
   submittedAt  DateTime  @default(now())
 
-  school  School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  form    RegistrationForm @relation(fields: [formId], references: [id], onDelete: Cascade)
-  student Student?         @relation(fields: [studentId], references: [id])
+  school  School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  form    RegistrationForm  @relation(fields: [formId], references: [id], onDelete: Cascade)
+  student Student?          @relation(fields: [studentId], references: [id])
+  enquiry AdmissionEnquiry? @relation(fields: [enquiryId], references: [id])
 
   @@index([schoolId, status])
   @@index([formId])
+  @@index([enquiryId])
+}
+
+/// A pre-application lead — walk-in, phone or website contact captured before a
+/// family commits to the formal admission form. "Converting" one generates (or
+/// reuses) a RegistrationForm link rather than duplicating the applicant-data
+/// capture that RegistrationForm/StudentRegistration already own; the enquiry
+/// flips to `converted` once a submission through that link arrives.
+///
+/// `source`: walk_in | phone | website | referral | other
+/// `status`: new | contacted | interested | not_interested | converted
+model AdmissionEnquiry {
+  id                String    @id @default(cuid())
+  schoolId          String
+  parentName        String
+  parentPhone       String
+  parentEmail       String?
+  childName         String
+  childDob          DateTime?
+  interestedClassId String?
+  source            String    @default("walk_in")
+  status            String    @default("new")
+  followUpDate      DateTime?
+  assignedToId      String?
+  notes             String?
+  createdById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  school          School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  interestedClass Class?                @relation(fields: [interestedClassId], references: [id])
+  assignedTo      Staff?                @relation(fields: [assignedToId], references: [id])
+  forms           RegistrationForm[]
+  registrations   StudentRegistration[]
+
+  @@index([schoolId, status])
+  @@index([schoolId, followUpDate])
+  @@index([interestedClassId])
+  @@index([assignedToId])
 }
 
 /// The employee master record — HR treats "employee" and "staff" as the same
@@ -686,7 +903,7 @@ model Staff {
   /// The login this employee signs in with, once one is granted. Their access
   /// level lives on the matching SchoolMembership, not here — one person, one
   /// account, one role per school.
-  userId             String?  @unique
+  userId             String?   @unique
   fullName           String
   firstName          String?
   middleName         String?
@@ -731,35 +948,51 @@ model Staff {
   bankAccountHolder  String?
   pfNumber           String?
   esicNumber         String?
+  /// Timetable module — soft caps the generator respects when scheduling this teacher.
+  maxPeriodsPerDay      Int?
+  maxConsecutivePeriods Int?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  school             School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  user               User?                  @relation(fields: [userId], references: [id])
-  department         Department?            @relation("StaffDepartment", fields: [departmentId], references: [id])
-  designation        Designation?           @relation(fields: [designationId], references: [id])
-  campus             Campus?                @relation("StaffCampus", fields: [campusId], references: [id])
-  employeeTypeRef    EmployeeType?          @relation(fields: [employeeTypeId], references: [id])
-  reportingManager   Staff?                 @relation("ReportingLine", fields: [reportingManagerId], references: [id])
-  directReports      Staff[]                @relation("ReportingLine")
-  educations         StaffEducation[]
-  experiences        StaffExperience[]
-  documents          StaffDocument[]
-  activityLogs       StaffActivityLog[]
-  transfers          StaffTransfer[]
-  convertedFrom      Candidate[]            @relation("CandidateToStaff")
-  vacanciesManaged   Vacancy[]              @relation("HiringManager")
-  interviewPanels    InterviewPanelMember[]
-  interviewEvals     InterviewEvaluation[]  @relation("Evaluator")
-  idCards            IDCard[]
-  qrVerification     QRVerification?
-  generationItems    IDCardGenerationItem[]
-  photoMappings      PhotoMapping[]
-  classesAsTeacher   Class[]                @relation("ClassTeacher")
-  sectionsAsTeacher  Section[]              @relation("SectionTeacher")
-  campusesHeaded     Campus[]               @relation("CampusHead")
-  departmentsHeaded  Department[]           @relation("DepartmentHead")
-  subjectAssignments SubjectAssignment[]
+  school                     School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user                       User?                  @relation(fields: [userId], references: [id])
+  department                 Department?            @relation("StaffDepartment", fields: [departmentId], references: [id])
+  designation                Designation?           @relation(fields: [designationId], references: [id])
+  campus                     Campus?                @relation("StaffCampus", fields: [campusId], references: [id])
+  employeeTypeRef            EmployeeType?          @relation(fields: [employeeTypeId], references: [id])
+  reportingManager           Staff?                 @relation("ReportingLine", fields: [reportingManagerId], references: [id])
+  directReports              Staff[]                @relation("ReportingLine")
+  educations                 StaffEducation[]
+  experiences                StaffExperience[]
+  documents                  StaffDocument[]
+  activityLogs               StaffActivityLog[]
+  transfers                  StaffTransfer[]
+  convertedFrom              Candidate[]            @relation("CandidateToStaff")
+  vacanciesManaged           Vacancy[]              @relation("HiringManager")
+  interviewPanels            InterviewPanelMember[]
+  interviewEvals             InterviewEvaluation[]  @relation("Evaluator")
+  idCards                    IDCard[]
+  qrVerification             QRVerification?
+  generationItems            IDCardGenerationItem[]
+  photoMappings              PhotoMapping[]
+  certificates               Certificate[]
+  classesAsTeacher           Class[]                @relation("ClassTeacher")
+  sectionsAsTeacher          Section[]              @relation("SectionTeacher")
+  campusesHeaded             Campus[]               @relation("CampusHead")
+  departmentsHeaded          Department[]           @relation("DepartmentHead")
+  subjectAssignments         SubjectAssignment[]
+  attendanceMarked           Attendance[]           @relation("AttendanceMarkedBy")
+  assignedAdmissionEnquiries AdmissionEnquiry[]
+  newsAuthored               News[]
+  attendance                 StaffAttendance[]
+  attendanceCorrections      AttendanceCorrection[]
+  leaveBalances              LeaveBalance[]
+  leaveRequests              LeaveRequest[]
+  transportDriverProfile     TransportDriver?
+  timetableUnavailability    TeacherUnavailability[]
+  timetableSlots             TimetableSlot[]
+  salaryStructureAssignments SalaryStructureAssignment[]
+  payrollEntries             PayrollEntry[]
 
   @@unique([schoolId, employeeId])
   @@index([schoolId, category])
@@ -1481,6 +1714,204 @@ model CardReplacement {
 }
 
 // ---------------------------------------------------------------------------
+// Certificates
+// ---------------------------------------------------------------------------
+
+/// A kind of certificate a school can issue — Bonafide, Transfer Certificate,
+/// Experience Certificate, etc. `schoolId` null means a system-provided type
+/// every school starts with; a school can add its own alongside them.
+/// `category`: student | staff
+model CertificateType {
+  id               String   @id @default(cuid())
+  schoolId         String?
+  key              String
+  name             String
+  category         String
+  numberingPrefix  String
+  requiresApproval Boolean  @default(false)
+  isSystemType     Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  school             School?                        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  templates          CertificateTemplate[]
+  certificates       Certificate[]
+  numberingSequences CertificateNumberingSequence[]
+
+  @@unique([schoolId, key])
+  @@index([schoolId, category])
+}
+
+/// `orientation`: portrait | landscape
+model CertificateTemplate {
+  id                String   @id @default(cuid())
+  schoolId          String?
+  isSystemTemplate  Boolean  @default(false)
+  basedOnTemplateId String?
+  certificateTypeId String
+  name              String
+  pageWidthMm       Float    @default(210)
+  pageHeightMm      Float    @default(297)
+  orientation       String   @default("portrait")
+  isDefault         Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  /// The "frame" — a full-page decorative background (ornate border, crest,
+  /// letterhead art) rendered behind every element. Uploaded, not drawn.
+  backgroundImageUrl String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  school           School?                      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  certificateType  CertificateType              @relation(fields: [certificateTypeId], references: [id], onDelete: Cascade)
+  basedOnTemplate  CertificateTemplate?         @relation("CertificateTemplateLineage", fields: [basedOnTemplateId], references: [id])
+  derivedTemplates CertificateTemplate[]        @relation("CertificateTemplateLineage")
+  elements         CertificateDesignElement[]
+  versions         CertificateTemplateVersion[]
+  certificates     Certificate[]
+
+  @@index([schoolId, certificateTypeId])
+  @@index([isSystemTemplate])
+}
+
+/// Same shape as DesignElement (ID cards), for certificate templates. `side` is
+/// always "front" today — certificates are single-sided — kept for symmetry
+/// with the ID card model rather than inventing a second shape to maintain.
+/// `type`: text | image | photo | logo | shape | line | qrcode | barcode | signature | dynamic_field
+/// `image` is the general-purpose picture element (uploaded via `imageUrl`, or
+/// field-bound like "school.logoUrl"/"school.principalSignatureUrl") — `logo`
+/// stays as a legacy alias for elements seeded before `image` existed.
+model CertificateDesignElement {
+  id              String   @id @default(cuid())
+  templateId      String
+  side            String   @default("front")
+  type            String
+  fieldKey        String?
+  content         String?
+  x               Float
+  y               Float
+  width           Float
+  height          Float
+  rotation        Float    @default(0)
+  fontSize        Float?
+  fontFamily      String?
+  fontWeight      String?
+  textAlign       String?
+  letterSpacing   Float?
+  lineHeight      Float?
+  color           String?
+  backgroundColor String?
+  /// For type="image": a direct uploaded URL. If `fieldKey` is also set,
+  /// fieldKey wins — the image resolves from the school/student/staff data
+  /// (e.g. "school.logoUrl") instead, same precedence text/dynamic_field use.
+  imageUrl        String?
+  /// mm; null/0 = no border.
+  borderWidth     Float?
+  borderColor     String?
+  /// solid | dashed | double
+  borderStyle     String   @default("solid")
+  opacity         Float    @default(1)
+  zIndex          Int      @default(0)
+  isLocked        Boolean  @default(false)
+  isHidden        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  template CertificateTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, side])
+}
+
+/// Snapshot of a template's full element tree, taken whenever it's published —
+/// same intent as TemplateVersion for ID cards.
+model CertificateTemplateVersion {
+  id            String   @id @default(cuid())
+  templateId    String
+  versionNumber Int
+  snapshotJson  String
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  template CertificateTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, versionNumber])
+}
+
+/// One row per (school, certificate type, year) — the counter behind
+/// `{{prefix}}/{{year}}/{{00001}}` numbering. Incremented inside the same
+/// transaction that issues the certificate, so two concurrent generations can
+/// never receive the same number.
+model CertificateNumberingSequence {
+  id                String @id @default(cuid())
+  schoolId          String
+  certificateTypeId String
+  year              Int
+  next              Int    @default(1)
+
+  school          School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  certificateType CertificateType @relation(fields: [certificateTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, certificateTypeId, year])
+}
+
+/// `status`: generated | issued | revoked | cancelled
+model Certificate {
+  id                String    @id @default(cuid())
+  schoolId          String
+  certificateTypeId String
+  templateId        String
+  studentId         String?
+  staffId           String?
+  academicYearId    String?
+  certificateNumber String
+  status            String    @default("generated")
+  issueDate         DateTime  @default(now())
+  pdfUrl            String?
+  /// Snapshot of every resolved {{field}} value at issue time, so later edits
+  /// to the student/staff record never retroactively change an issued
+  /// certificate. JSON string — see DesignElement note on SQLite.
+  fieldValuesJson   String
+  generatedByUserId String?
+  revokedAt         DateTime?
+  revokedReason     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  school          School                   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  certificateType CertificateType          @relation(fields: [certificateTypeId], references: [id])
+  template        CertificateTemplate      @relation(fields: [templateId], references: [id])
+  student         Student?                 @relation(fields: [studentId], references: [id])
+  staff           Staff?                   @relation(fields: [staffId], references: [id])
+  academicYear    AcademicYear?            @relation(fields: [academicYearId], references: [id])
+  generatedBy     User?                    @relation(fields: [generatedByUserId], references: [id])
+  verification    CertificateVerification?
+
+  @@unique([schoolId, certificateNumber])
+  @@index([schoolId, status])
+  @@index([studentId])
+  @@index([staffId])
+}
+
+/// Same shape and intent as QRVerification (ID cards) — an opaque public code,
+/// never the certificate number itself, and an explicit allowlist of what the
+/// public page may show.
+model CertificateVerification {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  schoolId          String
+  certificateId     String   @unique
+  isActive          Boolean  @default(true)
+  visibleFieldsJson String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  school      School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  certificate Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+}
+
+// ---------------------------------------------------------------------------
 // Bulk import
 // ---------------------------------------------------------------------------
 
@@ -1569,6 +2000,12 @@ model UploadedFile {
   candidateDocuments CandidateDocument[]
   schoolDocuments    SchoolDocument[]
   studentDocuments   StudentDocument[]
+  expenseAttachments ExpenseAttachment[]
+  newsFeaturedFor    News[]
+  newsAttachments    NewsAttachment[]
+  newsImages         NewsImage[]
+  salarySlips        SalarySlip[]
+  emailCampaignAttachments EmailCampaignAttachment[]
 
   @@index([schoolId, kind])
 }
@@ -1588,4 +2025,2344 @@ model AuditLog {
 
   @@index([schoolId, entityType, entityId])
   @@index([schoolId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// AI module — see AI-ROADMAP.md. Every table carries schoolId, queried through
+// it exactly like every other tenant-scoped model (see the note at the top of
+// this file); `userId` is stored as a plain id (no Prisma relation), matching
+// the AuditLog convention above, not a foreign key to User.
+// ---------------------------------------------------------------------------
+
+/// One AI School Assistant chat thread.
+model AiConversation {
+  id        String   @id @default(cuid())
+  schoolId  String
+  userId    String
+  title     String   @default("New conversation")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school   School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@index([schoolId, userId, updatedAt])
+}
+
+/// A single turn in an AiConversation. `role` is "user" | "assistant" | "system".
+model AiMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  schoolId       String
+  role           String
+  content        String
+  createdAt      DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  school       School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+/// One completed call to the AI provider — the record `/api/ai/health` and a
+/// future AI dashboard read response times and error rates from.
+/// `status` is "success" | "error" | "stopped". `module` is "assistant" |
+/// "analytics" | "reports" | "communication".
+model AiRequest {
+  id             String   @id @default(cuid())
+  schoolId       String
+  userId         String
+  module         String
+  model          String
+  status         String
+  responseTimeMs Int?
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
+  @@index([schoolId, userId, createdAt])
+}
+
+/// Per-user, per-month request count — the quota `assertWithinQuota()` checks
+/// against. No per-subscription-plan tiers yet (no Plan model exists); see
+/// AI-ROADMAP.md §2.
+model AiUsage {
+  id              String   @id @default(cuid())
+  schoolId        String
+  userId          String
+  model           String
+  periodStart     DateTime
+  requestCount    Int      @default(0)
+  estimatedTokens Int      @default(0)
+  updatedAt       DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, userId, periodStart])
+}
+
+/// Append-only record of every AI action that touched real data — the AI
+/// module's equivalent of AuditLog above, kept separate so AI activity can be
+/// reviewed on its own without filtering the general audit trail.
+model AiAuditLog {
+  id           String   @id @default(cuid())
+  schoolId     String
+  userId       String?
+  action       String
+  module       String
+  metadataJson String?
+  createdAt    DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Attendance
+// ---------------------------------------------------------------------------
+
+/// `status`: present | absent | late | half_day | leave
+///
+/// `subjectId = null` is daily/homeroom attendance, marked by the class
+/// teacher of `sectionId` (falling back to the class's own class teacher).
+/// `subjectId` set is attendance for that one subject period, marked by
+/// whichever teacher holds the SubjectAssignment for this class/section +
+/// subject — a teacher who is not the class teacher can still take
+/// attendance for the periods they actually teach.
+///
+/// No DB-level unique constraint on (studentId, date, subjectId): SQLite
+/// treats every NULL as distinct, so it couldn't dedupe the daily rows anyway.
+/// The API finds-then-updates instead (see /api/attendance), the same pattern
+/// SubjectAssignment already uses for its own duplicate check.
+model Attendance {
+  id             String   @id @default(cuid())
+  schoolId       String
+  studentId      String
+  classId        String
+  sectionId      String?
+  subjectId      String?
+  academicYearId String
+  date           DateTime
+  status         String
+  remarks        String?
+  markedById     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class        Class        @relation(fields: [classId], references: [id])
+  section      Section?     @relation(fields: [sectionId], references: [id])
+  subject      Subject?     @relation(fields: [subjectId], references: [id])
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+  markedBy     Staff?       @relation("AttendanceMarkedBy", fields: [markedById], references: [id])
+
+  @@index([schoolId, classId, sectionId, date])
+  @@index([schoolId, subjectId, date])
+  @@index([studentId, date])
+}
+
+/// Locks one class/section (+ optional subject period)'s attendance for one
+/// date, so a teacher can no longer silently re-mark history once submitted
+/// — see TEACHER-PORTAL-ROADMAP.md §3.1. Deliberately scoped finer than
+/// AttendancePeriodLock (which locks a whole month of *staff* attendance):
+/// student attendance is submitted per class/section/subject/date, so that's
+/// the natural lock granularity. `subjectId = null` mirrors Attendance's own
+/// "null = daily/homeroom" convention.
+model AttendanceLock {
+  id        String   @id @default(cuid())
+  schoolId  String
+  classId   String
+  sectionId String
+  subjectId String?
+  date      DateTime
+
+  lockedById String?
+  lockedAt   DateTime @default(now())
+
+  reopenedById String?
+  reopenedAt   DateTime?
+  reopenReason String?
+  /// True while locked; reopening sets this false and keeps the history,
+  /// same discipline AttendancePeriodLock uses for staff attendance.
+  isLocked     Boolean @default(true)
+
+  school  School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  class   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  section Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, classId, sectionId, subjectId, date])
+  @@index([schoolId, classId, sectionId, date])
+}
+
+/// One row per school — thresholds for the Defaulters list and which optional
+/// statuses a marker may choose. `mode` is descriptive only: daily and
+/// period-wise marking are both always available regardless of its value
+/// (see ATTENDANCE-ROADMAP.md §3) — changing it doesn't gate anything.
+/// `lockAfterSubmission` is deliberately not a field here: Phase 1 made the
+/// teacher-submission lock unconditional, and a toggle to disable it would
+/// reopen the silent-re-edit hole that closed.
+model AttendanceSettings {
+  id                String   @id @default(cuid())
+  schoolId          String   @unique
+  mode              String   @default("both")
+  warningThreshold  Float    @default(90)
+  criticalThreshold Float    @default(75)
+  allowHalfDay      Boolean  @default(true)
+  allowLate         Boolean  @default(true)
+  allowLeave        Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Examinations — see EXAM-ROADMAP.md. Phase 1 (this table pair): exam type
+// registry and Exam Creation itself. Schedule, marks entry/verification,
+// grading, results and report cards are later phases on the same roadmap.
+// ---------------------------------------------------------------------------
+
+/// A school-defined kind of examination — Unit Test, Quarterly, Half-Yearly,
+/// Annual, Practical, Internal Assessment, etc. A per-school master (like
+/// EmployeeType) rather than a hardcoded list, so "Quarterly Exam" and "Term
+/// Exam" are configuration, not separate modules — one Exam Creation flow
+/// against a chosen type.
+///
+/// `examCategory`: summative | formative
+/// `status`: active | inactive
+model ExamType {
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  code         String
+  examCategory String   @default("summative")
+  sortOrder    Int      @default(0)
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  exams  Exam[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
+/// One examination — Quarter 1 Examination, Unit Test 2, Annual Examination —
+/// created against an ExamType and scoped to an academic year.
+///
+/// `term` is a free-text label ("Term 1") rather than its own master table —
+/// the full Exam Planner (grouping exams under a term with per-term
+/// completion status) is a later phase; see EXAM-ROADMAP.md §4 Phase 3.
+///
+/// `resultType`: marks | grades | marks_and_grades
+/// `status`: draft | scheduled | ongoing | completed | results_pending | published | archived
+model Exam {
+  id             String    @id @default(cuid())
+  schoolId       String
+  academicYearId String
+  examTypeId     String
+  name           String
+  code           String
+  term           String?
+  startDate      DateTime
+  endDate        DateTime
+  resultDate     DateTime?
+  resultType     String    @default("marks")
+  status         String    @default("draft")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id])
+  examType     ExamType     @relation(fields: [examTypeId], references: [id])
+  classes      ExamClass[]
+
+  @@unique([schoolId, academicYearId, code])
+  @@index([schoolId, academicYearId])
+  @@index([schoolId, status])
+}
+
+/// Which class (and optionally one section) an exam applies to — same
+/// nullable-`sectionId`-means-"whole class" shape as NewsAudienceTarget and
+/// SubjectAssignment.
+model ExamClass {
+  id        String  @id @default(cuid())
+  examId    String
+  classId   String
+  sectionId String?
+
+  exam    Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  class   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  section Section? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, classId, sectionId])
+  @@index([examId])
+  @@index([classId])
+}
+
+// ---------------------------------------------------------------------------
+// Fees — Fee Structure
+// ---------------------------------------------------------------------------
+
+/// A fee head a school charges — Tuition Fee, Admission Fee, Transport Fee, Lab
+/// Fee, etc. A per-school master (like EmployeeType) rather than a hardcoded
+/// list, since every school names and organizes its fee heads differently.
+/// `status`: active | inactive
+model FeeCategory {
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  code         String
+  description  String?
+  /// Whether this fee head is ever eligible for refund (e.g. a caution deposit) —
+  /// informational now, read by the Refunds workflow once that module exists.
+  isRefundable Boolean  @default(false)
+  sortOrder    Int      @default(0)
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school         School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  items          FeeStructureItem[]
+  studentCharges StudentFeeCharge[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
+/// A fee-purpose student grouping — General, RTE, Staff Ward, Sibling,
+/// Management Quota — used to give a different fee structure to a subset of
+/// students within the same class. Deliberately separate from `Student.category`
+/// (the caste/RTE reservation category collected for board compliance): that
+/// field answers a legal question, this one answers a billing question, and a
+/// school's fee groupings rarely line up with its reservation categories.
+/// `status`: active | inactive
+model FeeStudentCategory {
+  id          String   @id @default(cuid())
+  schoolId    String
+  name        String
+  code        String
+  description String?
+  sortOrder   Int      @default(0)
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  students      Student[]
+  feeStructures FeeStructure[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
+/// A reusable late-payment penalty rule, attached to individual fee structure
+/// items so e.g. Tuition Fee and Transport Fee can carry different late-fee
+/// behavior within the same structure.
+/// `calculationType`: fixed | percentage | per_day_fixed | per_day_percentage
+/// `status`: active | inactive
+model LateFeeRule {
+  id              String   @id @default(cuid())
+  schoolId        String
+  name            String
+  calculationType String   @default("fixed")
+  /// Rupee amount for `fixed` / `per_day_fixed`; null for the percentage types.
+  amount          Float?
+  /// Percent of the overdue amount for `percentage` / `per_day_percentage`; null for the fixed types.
+  percentage      Float?
+  /// Days after the due date before the penalty starts accruing.
+  graceDays       Int      @default(0)
+  /// Optional cap so a per-day rule can't grow unbounded.
+  maxAmount       Float?
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  school School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  items  FeeStructureItem[]
+
+  @@index([schoolId])
+}
+
+/// A fee plan for a slice of the school — an academic year, optionally narrowed
+/// to one class, one section within it, and/or one fee-purpose student
+/// category. `classId`/`sectionId`/`studentCategoryId` left null means "applies
+/// to all" at that level, so a school can define one school-wide structure
+/// (e.g. a Library Fee for everyone) or many class-specific ones without
+/// duplicating rows for every combination.
+///
+/// `status`: draft | published | archived — only a `published` structure is
+/// live for billing. Publishing computes `FeeStructureAssignment` rows for
+/// every currently-matching student, and can be re-run later (e.g. after new
+/// admissions) to pick up newly-matching students without disturbing existing
+/// assignments.
+model FeeStructure {
+  id                String    @id @default(cuid())
+  schoolId          String
+  academicYearId    String
+  name              String
+  description       String?
+  classId           String?
+  sectionId         String?
+  studentCategoryId String?
+  status            String    @default("draft")
+  publishedAt       DateTime?
+  publishedById     String?
+  createdById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  school          School                   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYear    AcademicYear             @relation(fields: [academicYearId], references: [id])
+  class           Class?                   @relation(fields: [classId], references: [id])
+  section         Section?                 @relation(fields: [sectionId], references: [id])
+  studentCategory FeeStudentCategory?      @relation(fields: [studentCategoryId], references: [id])
+  items           FeeStructureItem[]
+  assignments     FeeStructureAssignment[]
+  charges         StudentFeeCharge[]
+
+  @@index([schoolId, academicYearId])
+  @@index([schoolId, status])
+  @@index([classId])
+}
+
+/// One fee head within a structure — the amount, billing frequency, and whether
+/// it is optional (e.g. a transport fee that only applies to bus users).
+/// `amount` is the total due for the full frequency period; when `installments`
+/// are defined their amounts must sum to it (enforced in the API — see
+/// src/lib/validation/fee-structure.ts — not the DB).
+/// `frequency`: one_time | monthly | quarterly | half_yearly | annually
+model FeeStructureItem {
+  id             String   @id @default(cuid())
+  feeStructureId String
+  feeCategoryId  String
+  amount         Float
+  frequency      String   @default("one_time")
+  isOptional     Boolean  @default(false)
+  lateFeeRuleId  String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  feeStructure FeeStructure       @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  feeCategory  FeeCategory        @relation(fields: [feeCategoryId], references: [id])
+  lateFeeRule  LateFeeRule?       @relation(fields: [lateFeeRuleId], references: [id])
+  installments FeeInstallment[]
+  charges      StudentFeeCharge[]
+
+  @@index([feeStructureId])
+  @@index([feeCategoryId])
+}
+
+/// One due-date row of a fee item's payment schedule — e.g. "Term 1, due 15
+/// Apr, ₹5,000". Optional: an item with no installments is billed as a single
+/// amount on its own frequency once Invoices (a later module) exist to do so.
+model FeeInstallment {
+  id                 String   @id @default(cuid())
+  feeStructureItemId String
+  label              String
+  dueDate            DateTime
+  amount             Float
+  sortOrder          Int      @default(0)
+
+  feeStructureItem FeeStructureItem @relation(fields: [feeStructureItemId], references: [id], onDelete: Cascade)
+
+  @@index([feeStructureItemId])
+}
+
+/// Bridges a published FeeStructure to the students it actually applies to —
+/// computed automatically on publish, and the join that Invoices/Student Fees
+/// (later modules) will read from rather than re-deriving eligibility themselves.
+/// `status`: active | removed — `removed` means the student stopped matching
+/// (e.g. changed class) after assignment; the row is kept for history instead
+/// of being deleted.
+model FeeStructureAssignment {
+  id             String    @id @default(cuid())
+  schoolId       String
+  feeStructureId String
+  studentId      String
+  status         String    @default("active")
+  assignedAt     DateTime  @default(now())
+  removedAt      DateTime?
+
+  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  feeStructure FeeStructure @relation(fields: [feeStructureId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([feeStructureId, studentId])
+  @@index([schoolId, studentId])
+}
+
+// ---------------------------------------------------------------------------
+// Fees — Student Fees
+// ---------------------------------------------------------------------------
+
+/// A single billable line on a student's fee account — the individual
+/// financial-account ledger the Student Fees module presents. Generated
+/// automatically for every mandatory (`isOptional = false`) item on a
+/// FeeStructure the student is assigned to (one row per FeeInstallment, or one
+/// lump-sum row for an item with none — see syncFeeStructureAssignments in
+/// src/lib/fee-eligibility.ts), or added directly by an admin: either opting a
+/// student into an *optional* item (`feeStructureItemId` set, `isManual`
+/// false) or a fully ad-hoc charge with no backing item (`isManual` true).
+///
+/// The amount actually owed is NOT stored here — it's `amount` reduced by any
+/// StudentFeeAdjustment rows against this charge, computed at read time (see
+/// src/lib/student-fee-ledger.ts) so the adjustment history is never lost.
+///
+/// `status`: active | cancelled — cancelling (an admin voiding a mistake)
+/// excludes a charge from every total; a fully waived charge stays `active`
+/// and simply nets to zero, so the waiver remains visible in history.
+model StudentFeeCharge {
+  id                 String    @id @default(cuid())
+  schoolId           String
+  studentId          String
+  feeStructureId     String?
+  feeStructureItemId String?
+  feeCategoryId      String
+  label              String
+  amount             Float
+  dueDate            DateTime?
+  isManual           Boolean   @default(false)
+  status             String    @default("active")
+  note               String?
+  createdById        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  school           School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student          Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeStructure     FeeStructure?          @relation(fields: [feeStructureId], references: [id])
+  feeStructureItem FeeStructureItem?      @relation(fields: [feeStructureItemId], references: [id])
+  feeCategory      FeeCategory            @relation(fields: [feeCategoryId], references: [id])
+  adjustments      StudentFeeAdjustment[]
+  allocations      PaymentAllocation[]
+
+  @@index([schoolId, studentId])
+  @@index([feeStructureId])
+  @@index([feeStructureItemId])
+}
+
+/// A modification against a student's fee account. `waiver`/`discount` always
+/// target one `chargeId` and reduce it; `correction` targets one charge and
+/// can move it up or down (`amount` is signed); `transfer_out` moves an
+/// outstanding amount off this student's account onto `relatedStudentId`'s —
+/// the receiving side is a new StudentFeeCharge created on that student (see
+/// POST /api/students/[id]/fees/transfer), not a second adjustment, so each
+/// side of a transfer has exactly one ledger effect.
+///
+/// `type`: waiver | discount | correction | transfer_out
+model StudentFeeAdjustment {
+  id               String   @id @default(cuid())
+  schoolId         String
+  studentId        String
+  chargeId         String?
+  type             String
+  /// Positive magnitude for waiver/discount/transfer_out; signed for correction.
+  amount           Float
+  reason           String?
+  relatedStudentId String?
+  appliedById      String?
+  appliedAt        DateTime @default(now())
+
+  school         School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student        Student           @relation("StudentFeeAdjustments", fields: [studentId], references: [id], onDelete: Cascade)
+  charge         StudentFeeCharge? @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  relatedStudent Student?          @relation("StudentFeeAdjustmentTransfers", fields: [relatedStudentId], references: [id])
+
+  @@index([schoolId, studentId])
+  @@index([chargeId])
+}
+
+/// Money actually received from a family, against one student.
+///
+/// A payment is never edited once recorded — a mistake is corrected by
+/// cancelling it (which voids its receipt) and recording the right one, so the
+/// paper trail always matches what the family was handed.
+model Payment {
+  id            String    @id @default(cuid())
+  schoolId      String
+  studentId     String
+  /// Human-facing payment number, unique per school.
+  paymentNumber String
+  paidOn        DateTime
+  amount        Float
+  method        String
+  /// Cheque number, UPI reference, transaction id — whatever the method needs.
+  referenceNo   String?
+  bankName      String?
+  /// Set once Invoices exist; a payment may equally be taken against no invoice.
+  invoiceRef    String?
+  note          String?
+  status        String    @default("recorded")
+  cancelledAt   DateTime?
+  cancelReason  String?
+  cancelledById String?
+  receivedById  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  school      School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student     Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  allocations PaymentAllocation[]
+  receipt     Receipt?
+
+  @@unique([schoolId, paymentNumber])
+  @@index([schoolId, studentId])
+  @@index([schoolId, paidOn])
+}
+
+/// How one payment was split across the student's outstanding charges. This is
+/// what makes "fee components" on the receipt a real breakdown rather than a
+/// label typed by hand.
+model PaymentAllocation {
+  id        String @id @default(cuid())
+  paymentId String
+  chargeId  String
+  amount    Float
+
+  payment Payment          @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  charge  StudentFeeCharge @relation(fields: [chargeId], references: [id])
+
+  @@unique([paymentId, chargeId])
+  @@index([chargeId])
+}
+
+/// The official receipt for a payment.
+///
+/// Deliberately a snapshot, not a view: school name, address, student class and
+/// the fee breakdown are copied in at issue time, so reprinting a two-year-old
+/// receipt shows what the family was actually given — not today's school
+/// address or the student's current class. There is no update or delete route
+/// for this table; a receipt is only ever voided, and voiding keeps the row.
+model Receipt {
+  id            String   @id @default(cuid())
+  schoolId      String
+  paymentId     String   @unique
+  studentId     String
+  /// Unique per school, gapless within its series. Never reused.
+  receiptNumber String
+  series        String   @default("RCPT")
+  issuedOn      DateTime @default(now())
+  issuedById    String?
+
+  /// --- snapshot: school ---
+  schoolName    String
+  schoolAddress String?
+  schoolPhone   String?
+  schoolEmail   String?
+  schoolLogoUrl String?
+
+  /// --- snapshot: student ---
+  studentName     String
+  admissionNumber String
+  className       String?
+  sectionName     String?
+  academicYear    String?
+
+  /// --- snapshot: money ---
+  amountPaid     Float
+  method         String
+  referenceNo    String?
+  invoiceRef     String?
+  paidOn         DateTime
+  /// What the student still owed across all charges immediately after this payment.
+  balanceAfter   Float
+  /// JSON array of { label, category, charged, paidNow, paidToDate } — SQLite has no JSON type.
+  componentsJson String
+
+  status     String    @default("issued")
+  voidedAt   DateTime?
+  voidReason String?
+  voidedById String?
+
+  emailedAt DateTime?
+  emailedTo String?
+
+  createdAt DateTime @default(now())
+
+  school  School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, receiptNumber])
+  @@index([schoolId, issuedOn])
+  @@index([schoolId, studentId])
+}
+
+/// Per-school, per-year receipt numbering. A row is locked and bumped inside the
+/// same transaction that writes the receipt, so two cashiers taking money at the
+/// same moment cannot be handed the same number.
+model ReceiptCounter {
+  id       String @id @default(cuid())
+  schoolId String
+  series   String
+  year     Int
+  next     Int    @default(1)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, series, year])
+}
+
+/// Heads of expenditure — Salaries, Electricity, Rent, Maintenance and so on.
+/// Seeded with the usual set, but a school adds its own.
+model ExpenseCategory {
+  id                String  @id @default(cuid())
+  schoolId          String
+  name              String
+  code              String
+  description       String?
+  /// Expenses above this need a second pair of eyes even from someone who could
+  /// normally self-approve. Null means the school-wide rule applies.
+  approvalThreshold Float?
+  status            String  @default("active")
+  sortOrder         Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
+/// Money spent by the school.
+///
+/// An expense moves draft -> submitted -> approved -> paid, or is rejected back
+/// to whoever raised it. The status is the authority on what may happen next —
+/// see src/lib/finance/expense-workflow.ts — so no route re-decides the rules
+/// for itself.
+model Expense {
+  id            String @id @default(cuid())
+  schoolId      String
+  /// Human-facing number, unique per school: EXP/2026-27/000123.
+  expenseNumber String
+  categoryId    String
+
+  title       String
+  description String?
+  amount      Float
+  /// Tax shown separately where a bill states it; amount is always the total.
+  taxAmount   Float    @default(0)
+  expenseDate DateTime
+
+  /// Who was paid. Free-text rather than a vendor master: a school pays one-off
+  /// suppliers far more often than it maintains a supplier list.
+  payeeName    String
+  payeeContact String?
+  payeeGstin   String?
+
+  paymentMethod String?
+  referenceNo   String?
+  bankName      String?
+  paidOn        DateTime?
+
+  /// draft | submitted | approved | rejected | paid | cancelled
+  status String @default("draft")
+
+  submittedById   String?
+  submittedAt     DateTime?
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectedById    String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  paidById        String?
+  cancelledAt     DateTime?
+  cancelReason    String?
+
+  campusId     String?
+  departmentId String?
+  note         String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school      School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  category    ExpenseCategory     @relation(fields: [categoryId], references: [id])
+  attachments ExpenseAttachment[]
+  events      ExpenseEvent[]
+
+  @@unique([schoolId, expenseNumber])
+  @@index([schoolId, status])
+  @@index([schoolId, expenseDate])
+  @@index([categoryId])
+}
+
+/// Bills and invoices filed against an expense. The file itself lives outside
+/// the public directory and is only readable through the access-checked file route.
+model ExpenseAttachment {
+  id             String   @id @default(cuid())
+  expenseId      String
+  uploadedFileId String
+  kind           String   @default("bill")
+  label          String?
+  uploadedById   String?
+  createdAt      DateTime @default(now())
+
+  expense      Expense      @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  uploadedFile UploadedFile @relation(fields: [uploadedFileId], references: [id])
+
+  @@index([expenseId])
+}
+
+/// Every move an expense makes. Kept as its own trail so "who approved this,
+/// when, and why it was rejected" survives later edits to the expense itself.
+model ExpenseEvent {
+  id         String   @id @default(cuid())
+  expenseId  String
+  fromStatus String?
+  toStatus   String
+  actorId    String?
+  actorName  String?
+  note       String?
+  occurredAt DateTime @default(now())
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([expenseId])
+}
+
+// ---------------------------------------------------------------------------
+// News Management
+// ---------------------------------------------------------------------------
+
+/// `status`: active | inactive
+model NewsCategory {
+  id        String   @id @default(cuid())
+  schoolId  String
+  name      String
+  code      String
+  colorHex  String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  news   News[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
+/// `priority`: normal | important | urgent | pinned
+/// `status`: draft | scheduled | published | expired | archived | cancelled
+/// `audienceType`: all | students | parents | teachers | staff | admin
+///
+/// Zero `NewsAudienceTarget` rows for an audience-restrictable `audienceType`
+/// (students/parents/teachers) means "every class/section" — rows narrow it to
+/// specific classes/sections. `publishAt`/`expiresAt` drive a lazy status
+/// transition applied on read (src/lib/news/resolve-status.ts) — there is no
+/// background scheduler in this app.
+model News {
+  id                     String    @id @default(cuid())
+  schoolId               String
+  categoryId             String?
+  authorStaffId          String?
+  title                  String
+  shortDescription       String?
+  contentHtml            String
+  featuredImageFileId    String?
+  priority               String    @default("normal")
+  status                 String    @default("draft")
+  audienceType           String    @default("all")
+  commentsEnabled        Boolean   @default(true)
+  notifyInApp            Boolean   @default(true)
+  publishAt              DateTime?
+  expiresAt              DateTime?
+  autoArchiveAfterExpiry Boolean   @default(true)
+  viewCount              Int       @default(0)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  school          School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  category        NewsCategory?        @relation(fields: [categoryId], references: [id])
+  author          Staff?               @relation(fields: [authorStaffId], references: [id])
+  featuredImage   UploadedFile?        @relation(fields: [featuredImageFileId], references: [id])
+  audienceTargets NewsAudienceTarget[]
+  attachments     NewsAttachment[]
+  images          NewsImage[]
+  comments        NewsComment[]
+  notifications   Notification[]
+
+  @@index([schoolId, status])
+  @@index([schoolId, priority])
+  @@index([schoolId, publishAt])
+}
+
+model NewsAudienceTarget {
+  id        String  @id @default(cuid())
+  newsId    String
+  classId   String?
+  sectionId String?
+
+  news    News     @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  class   Class?   @relation(fields: [classId], references: [id])
+  section Section? @relation(fields: [sectionId], references: [id])
+
+  @@index([newsId])
+}
+
+model NewsAttachment {
+  id             String   @id @default(cuid())
+  newsId         String
+  uploadedFileId String
+  label          String?
+  createdAt      DateTime @default(now())
+
+  news         News         @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  uploadedFile UploadedFile @relation(fields: [uploadedFileId], references: [id])
+
+  @@index([newsId])
+}
+
+model NewsImage {
+  id             String   @id @default(cuid())
+  newsId         String
+  uploadedFileId String
+  caption        String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  news         News         @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  uploadedFile UploadedFile @relation(fields: [uploadedFileId], references: [id])
+
+  @@index([newsId])
+}
+
+/// `authorName`/`authorRole` are captured at post time rather than referencing
+/// a user record — there is no real per-user session for students/parents/
+/// teachers anywhere in this app yet (matches `ExpenseEvent.actorName`).
+/// `status`: visible | hidden
+model NewsComment {
+  id         String   @id @default(cuid())
+  newsId     String
+  authorName String
+  authorRole String
+  content    String
+  status     String   @default("visible")
+  createdAt  DateTime @default(now())
+
+  news News @relation(fields: [newsId], references: [id], onDelete: Cascade)
+
+  @@index([newsId])
+}
+
+/// A school-wide broadcast feed (not addressed to one person — there is no
+/// per-user login for most roles yet, so there is no honest way to track
+/// individual read state). Powers the notification bell in the top nav.
+/// `type`: news_published | general
+model Notification {
+  id            String   @id @default(cuid())
+  schoolId      String
+  type          String   @default("general")
+  title         String
+  description   String?
+  relatedNewsId String?
+  createdAt     DateTime @default(now())
+
+  school      School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  relatedNews News?  @relation(fields: [relatedNewsId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
+}
+
+/// A day the school is closed, or a special day it is open when it normally
+/// would not be. Feeds attendance directly, so nobody is marked absent on a
+/// holiday, and feeds payroll through the working-day count.
+model Holiday {
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  startDate    DateTime
+  /// Same as startDate for a single day; later for a vacation block.
+  endDate      DateTime
+  holidayType  String   @default("school")
+  /// all | teaching | non_teaching — some closures apply to one group only.
+  appliesTo    String   @default("all")
+  campusId     String?
+  /// True for a special working day: the school IS open on what is normally an off day.
+  isWorkingDay Boolean  @default(false)
+  description  String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  campus Campus? @relation(fields: [campusId], references: [id])
+
+  @@index([schoolId, startDate])
+}
+
+/// One employee's attendance for one day.
+///
+/// Exactly one row per employee per day, which is what makes the monthly
+/// summary payroll reads a simple count rather than a reconciliation.
+model StaffAttendance {
+  id       String   @id @default(cuid())
+  schoolId String
+  staffId  String
+  date     DateTime
+
+  /// present | absent | half_day | late | early_leaving | on_duty | wfh |
+  /// holiday | weekly_off | paid_leave | unpaid_leave
+  status String
+
+  checkIn       DateTime?
+  checkOut      DateTime?
+  lateMinutes   Int?
+  workedMinutes Int?
+  remarks       String?
+
+  /// manual | leave | holiday | import — so an auto-written holiday row is
+  /// distinguishable from one HR typed by hand.
+  source         String  @default("manual")
+  /// Set when the row was written by approving a leave request.
+  leaveRequestId String?
+
+  markedById String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  school       School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff        Staff                  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  leaveRequest LeaveRequest?          @relation(fields: [leaveRequestId], references: [id])
+  corrections  AttendanceCorrection[]
+
+  @@unique([staffId, date])
+  @@index([schoolId, date])
+  @@index([schoolId, staffId])
+}
+
+/// An employee disputing a day's attendance. Never edits the row directly —
+/// HR reviews, and only an approval rewrites the attendance.
+model AttendanceCorrection {
+  id           String   @id @default(cuid())
+  schoolId     String
+  staffId      String
+  attendanceId String?
+  date         DateTime
+
+  currentStatus     String?
+  requestedStatus   String
+  requestedCheckIn  DateTime?
+  requestedCheckOut DateTime?
+  reason            String
+
+  /// pending | approved | rejected
+  status       String    @default("pending")
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school     School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff      Staff            @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  attendance StaffAttendance? @relation(fields: [attendanceId], references: [id])
+
+  @@index([schoolId, status])
+  @@index([staffId])
+}
+
+/// Attendance for a month, frozen.
+///
+/// Payroll must run against figures that cannot move under it, so once HR locks
+/// a month nobody edits that month's attendance until an authorised user
+/// reopens it — and the reopening is recorded rather than silent.
+model AttendancePeriodLock {
+  id       String @id @default(cuid())
+  schoolId String
+  year     Int
+  month    Int
+
+  lockedById String?
+  lockedAt   DateTime @default(now())
+
+  reopenedById String?
+  reopenedAt   DateTime?
+  reopenReason String?
+  /// True while locked; reopening sets this false and keeps the history.
+  isLocked     Boolean   @default(true)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, year, month])
+}
+
+/// A kind of leave the school offers. Configurable per school, because leave
+/// entitlement is exactly the thing that differs between them.
+model LeaveType {
+  id       String @id @default(cuid())
+  schoolId String
+  name     String
+  code     String
+
+  /// Unpaid leave is the one that reaches payroll as a deduction.
+  isPaid           Boolean @default(true)
+  /// Days granted per year. Null means uncapped, which is normal for unpaid.
+  annualQuota      Float?
+  carryForward     Boolean @default(false)
+  maxCarryForward  Float?
+  /// Sick leave beyond a few days usually needs a medical certificate.
+  requiresDocument Boolean @default(false)
+  /// all | teaching | non_teaching
+  appliesTo        String  @default("all")
+  allowHalfDay     Boolean @default(true)
+  sortOrder        Int     @default(0)
+  status           String  @default("active")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school   School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  balances LeaveBalance[]
+  requests LeaveRequest[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
+/// What one employee is entitled to, and has used, of one leave type in one year.
+model LeaveBalance {
+  id          String @id @default(cuid())
+  schoolId    String
+  staffId     String
+  leaveTypeId String
+  year        Int
+
+  entitled       Float @default(0)
+  carriedForward Float @default(0)
+  used           Float @default(0)
+  /// Applied for but not yet decided, held so two open requests cannot spend
+  /// the same day twice.
+  pending        Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff     Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, leaveTypeId, year])
+  @@index([schoolId, year])
+}
+
+/// An application for leave.
+///
+/// Approving one writes the attendance for every working day it covers, which
+/// is what makes leave and attendance agree rather than being two lists someone
+/// has to reconcile at payroll time.
+model LeaveRequest {
+  id          String @id @default(cuid())
+  schoolId    String
+  staffId     String
+  leaveTypeId String
+
+  startDate DateTime
+  endDate   DateTime
+  /// none | first_half | second_half — only meaningful on a single-day request.
+  halfDay   String   @default("none")
+  /// Working days the request actually consumes; holidays and weekly offs excluded.
+  days      Float
+
+  reason             String
+  contactDuringLeave String?
+  documentFileId     String?
+
+  /// pending | approved | rejected | cancelled
+  status       String    @default("pending")
+  appliedAt    DateTime  @default(now())
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+  cancelledAt  DateTime?
+  cancelReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school     School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff      Staff             @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  leaveType  LeaveType         @relation(fields: [leaveTypeId], references: [id])
+  attendance StaffAttendance[]
+
+  @@index([schoolId, status])
+  @@index([staffId])
+  @@index([schoolId, startDate])
+}
+
+// ---------------------------------------------------------------------------
+// Payroll — see HR-PAYROLL-ROADMAP.md. Phase 2 (components/structures/rules,
+// this pass) + Phase 3 (periods/entries/slips, this pass). Advances,
+// reimbursements, overtime, shifts, assets, performance, and exit/offboarding
+// are later phases on the same roadmap, deliberately not built yet.
+// ---------------------------------------------------------------------------
+
+/// A school-defined pay component — Basic, HRA, PF, Professional Tax, etc. A
+/// per-school master, same shape as EmployeeType/FeeCategory: the school
+/// defines its own list rather than the app hardcoding one.
+///
+/// `componentType`: earning | deduction
+/// `calculationType`: fixed | percentage_of_basic | formula (formula is
+///   declared for forward compatibility but not evaluated yet — see
+///   src/lib/payroll/calculate.ts)
+/// A component whose `code` is exactly "BASIC" is the basis every
+/// `percentage_of_basic` component in the same structure resolves against.
+/// `status`: active | inactive
+model SalaryComponent {
+  id              String   @id @default(cuid())
+  schoolId        String
+  name            String
+  code            String
+  componentType   String
+  calculationType String   @default("fixed")
+  amount          Float?
+  percentage      Float?
+  formula         String?
+  isTaxable       Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  school         School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  structureItems SalaryStructureItem[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
+/// A named bundle of components ("Teacher Grade I") assigned to staff via
+/// SalaryStructureAssignment — never assigned directly to a component.
+/// `status`: active | inactive
+model SalaryStructure {
+  id          String   @id @default(cuid())
+  schoolId    String
+  name        String
+  description String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school      School                       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  items       SalaryStructureItem[]
+  assignments SalaryStructureAssignment[]
+  entries     PayrollEntry[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+/// One component within a structure. `amount`/`percentage` override the
+/// component's own default for this structure only, when set.
+model SalaryStructureItem {
+  id          String @id @default(cuid())
+  structureId String
+  componentId String
+  amount      Float?
+  percentage  Float?
+  sortOrder   Int    @default(0)
+
+  structure SalaryStructure @relation(fields: [structureId], references: [id], onDelete: Cascade)
+  component SalaryComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@unique([structureId, componentId])
+  @@index([structureId])
+}
+
+/// Which structure a staff member is on, and since when — the same
+/// StaffTransfer-shaped history as everywhere else in this schema: a new row
+/// with an effective date, never a mutable pointer that drifts out of sync
+/// with reality. `effectiveTo = null` means this is the current assignment.
+model SalaryStructureAssignment {
+  id            String    @id @default(cuid())
+  schoolId      String
+  staffId       String
+  structureId   String
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdById   String?
+  createdAt     DateTime  @default(now())
+
+  school    School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff     Staff           @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  structure SalaryStructure @relation(fields: [structureId], references: [id])
+
+  @@index([schoolId, staffId])
+  @@index([structureId])
+}
+
+/// A statutory/configurable payroll rule — PF, ESI, Professional Tax, TDS —
+/// versioned by effective date so a changed government rate is a new row, not
+/// an edit that would silently rewrite past payroll's math.
+///
+/// `ruleType`: pf | esi | professional_tax | tds
+/// `applicableEmployeeGroup`: all | teaching | non_teaching (see
+///   src/lib/hr/work-calendar.ts staffGroup())
+/// `status`: active | inactive
+model PayrollRule {
+  id                           String    @id @default(cuid())
+  schoolId                     String
+  ruleType                     String
+  effectiveDate                DateTime
+  rate                         Float?
+  thresholdAmount              Float?
+  employeeContributionPercent  Float?
+  employerContributionPercent  Float?
+  applicableEmployeeGroup      String    @default("all")
+  status                       String    @default("active")
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, ruleType, effectiveDate])
+}
+
+/// One payroll run for a calendar month. Freezes once locked — the exact
+/// AttendancePeriodLock discipline (reopening is a deliberate, recorded act,
+/// never a silent edit) — since a payslip printed off a locked period must
+/// keep matching it.
+/// `status`: draft | processing | processed | approved | locked
+model PayrollPeriod {
+  id           String    @id @default(cuid())
+  schoolId     String
+  year         Int
+  month        Int
+  status       String    @default("draft")
+  processedAt  DateTime?
+  approvedById String?
+  approvedAt   DateTime?
+  lockedById   String?
+  lockedAt     DateTime?
+  reopenedById String?
+  reopenedAt   DateTime?
+  reopenReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  school  School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  entries PayrollEntry[]
+
+  @@unique([schoolId, year, month])
+  @@index([schoolId, status])
+}
+
+/// One staff member's calculated pay for one period. `earningsJson` and
+/// `deductionsJson` are `[{label, amount}]` snapshots taken at calculation
+/// time — never recomputed live afterward, so a slip printed later always
+/// matches what was actually approved, even if the staff member's structure
+/// or the school's payroll rules change the next day.
+/// `status`: draft | calculated | approved | locked
+model PayrollEntry {
+  id              String   @id @default(cuid())
+  schoolId        String
+  periodId        String
+  staffId         String
+  structureId     String?
+  workingDays     Int
+  payableDays     Float
+  grossSalary     Float
+  totalDeductions Float
+  netSalary       Float
+  earningsJson    String
+  deductionsJson  String
+  status          String   @default("draft")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  school    School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  period    PayrollPeriod    @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  staff     Staff            @relation(fields: [staffId], references: [id])
+  structure SalaryStructure? @relation(fields: [structureId], references: [id])
+  slip      SalarySlip?
+
+  @@unique([periodId, staffId])
+  @@index([schoolId, periodId])
+  @@index([staffId])
+}
+
+/// The generated, numbered document for one PayrollEntry — one slip per
+/// entry, created only once the period is approved/locked.
+model SalarySlip {
+  id          String   @id @default(cuid())
+  schoolId    String
+  entryId     String   @unique
+  slipNumber  String
+  pdfFileId   String?
+  generatedAt DateTime @default(now())
+
+  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  entry        PayrollEntry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  uploadedFile UploadedFile? @relation(fields: [pdfFileId], references: [id])
+
+  @@index([schoolId])
+}
+
+/// Transactional counter for slip numbers, one row per (schoolId, year) —
+/// same upsert-then-increment shape as CertificateNumberingSequence /
+/// LibraryAccessionCounter, so two concurrent slip generations never race.
+model SalarySlipNumberingSequence {
+  id       String @id @default(cuid())
+  schoolId String
+  year     Int
+  next     Int    @default(1)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, year])
+}
+
+// ---------------------------------------------------------------------------
+// Library — Phase 1 (foundation) + Phase 2 (catalogue & copies). See
+// LIBRARY-ROADMAP.md for the full module plan (circulation, reservations,
+// fines, acquisition, digital library, etc. land in later phases).
+// ---------------------------------------------------------------------------
+
+/// Per-school library category, with optional parent for a two-level hierarchy
+/// (e.g. Academic > Mathematics). `isSystemCategory` marks the seeded defaults.
+model LibraryCategory {
+  id               String   @id @default(cuid())
+  schoolId         String
+  name             String
+  parentId         String?
+  isSystemCategory Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  school   School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  parent   LibraryCategory?  @relation("LibraryCategoryHierarchy", fields: [parentId], references: [id])
+  children LibraryCategory[] @relation("LibraryCategoryHierarchy")
+  books    LibraryBook[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId, parentId])
+}
+
+/// Borrowing and fine configuration — one row per school. Circulation and
+/// fines (later phases) resolve limits from here live rather than snapshotting
+/// them onto a member, so a settings change applies immediately.
+model LibrarySettings {
+  id                 String   @id @default(cuid())
+  schoolId           String   @unique
+  studentMaxBooks    Int      @default(2)
+  studentIssueDays   Int      @default(14)
+  teacherMaxBooks    Int      @default(5)
+  teacherIssueDays   Int      @default(30)
+  staffMaxBooks      Int      @default(3)
+  staffIssueDays     Int      @default(21)
+  maxRenewals        Int      @default(2)
+  finePerDay         Float    @default(5)
+  maxFine            Float    @default(500)
+  reminderDaysBefore Int      @default(2)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+/// The title-level catalogue entry — not a physical item. See LibraryBookCopy
+/// for the one-row-per-physical-copy model (a title may have many copies).
+model LibraryBook {
+  id                 String   @id @default(cuid())
+  schoolId           String
+  title              String
+  subtitle           String?
+  author             String
+  isbn10             String?
+  isbn13             String?
+  publisher          String?
+  publicationYear    Int?
+  edition            String?
+  language           String?
+  pageCount          Int?
+  categoryId         String?
+  subjectId          String?
+  /// JSON array of Class ids this title is relevant to — SQLite has no array type.
+  classRelevanceJson String?
+  description        String?
+  coverImageUrl      String?
+  deweyDecimal       String?
+  /// Default shelf/rack/row — an individual copy may override these.
+  shelf              String?
+  rack               String?
+  rowLabel           String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  school   School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  category LibraryCategory?  @relation(fields: [categoryId], references: [id])
+  subject  Subject?          @relation(fields: [subjectId], references: [id])
+  copies   LibraryBookCopy[]
+
+  @@index([schoolId, categoryId])
+  @@index([schoolId, title])
+}
+
+/// One row per physical item — the brief's "one book title is not the same as
+/// one physical book". `status`: available | issued | reserved | lost |
+/// damaged | under_maintenance | removed. `condition`: excellent | good |
+/// fair | damaged | severely_damaged.
+model LibraryBookCopy {
+  id              String    @id @default(cuid())
+  schoolId        String
+  bookId          String
+  accessionNumber String
+  barcode         String
+  /// Integration-ready for RFID hardware — no reader integration in this codebase yet.
+  rfidTag         String?
+  status          String    @default("available")
+  condition       String    @default("good")
+  shelf           String?
+  rack            String?
+  rowLabel        String?
+  purchaseDate    DateTime?
+  price           Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  school School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  book   LibraryBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, accessionNumber])
+  @@unique([schoolId, barcode])
+  @@index([schoolId, bookId])
+  @@index([schoolId, status])
+}
+
+/// One row per (school, year) — the counter behind the `LIB-{year}-{0000001}`
+/// accession/barcode format. Incremented inside the same transaction that
+/// creates the copy, same pattern as ReceiptCounter/CertificateNumberingSequence.
+model LibraryAccessionCounter {
+  id       String @id @default(cuid())
+  schoolId String
+  year     Int
+  next     Int    @default(1)
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, year])
+}
+
+// ---------------------------------------------------------------------------
+// Transport — see TRANSPORT-ROADMAP.md
+// ---------------------------------------------------------------------------
+
+/// A vehicle in the school's transport fleet — Phase 1 (Foundation) of
+/// TRANSPORT-ROADMAP.md. Identity is the vehicle's real-world RTO
+/// registration number, entered once — unlike LibraryAccessionCounter/
+/// CertificateNumberingSequence, no internal numbering sequence is needed
+/// here. Documents (RC/insurance/fitness/permit/pollution, with expiry
+/// tracking), maintenance history, driver assignment, and route assignment
+/// are later phases; this model is the registry they'll attach to.
+/// `vehicleType`: bus | van | car | other.
+/// `status`: active | in_service | maintenance | inactive | retired.
+model TransportVehicle {
+  id                String   @id @default(cuid())
+  schoolId          String
+  vehicleNumber     String
+  vehicleType       String   @default("bus")
+  make              String?
+  modelName         String?
+  manufacturingYear Int?
+  seatingCapacity   Int?
+  standingCapacity  Int?
+  fuelType          String?
+  color             String?
+  /// Integration-ready for a GPS tracking device — no live-tracking pipeline
+  /// in this codebase yet (TRANSPORT-ROADMAP.md Phase 10), just the column.
+  gpsDeviceId       String?
+  status            String   @default("active")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  school           School                     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  routeAssignments TransportRouteAssignment[]
+
+  @@unique([schoolId, vehicleNumber])
+  @@index([schoolId, status])
+}
+
+/// A driver either IS a school employee (`staffId` set — the common case,
+/// giving name/photo/phone/employment status for free from `Staff`) or is a
+/// third-party vendor driver who never has a `Staff` row (`staffId` null; the
+/// fallback identity fields below apply instead). Driving-specific fields
+/// apply either way. Same dual-identity shape `LibraryMember` will use for
+/// `studentId?`/`staffId?`.
+model TransportDriver {
+  id                           String    @id @default(cuid())
+  schoolId                     String
+  staffId                      String?   @unique
+  fullName                     String?
+  phone                        String?
+  photoUrl                     String?
+  address                      String?
+  licenseNumber                String?
+  licenseType                  String?
+  licenseIssueDate             DateTime?
+  licenseExpiryDate            DateTime?
+  policeVerificationDate       DateTime?
+  medicalCertificateExpiryDate DateTime?
+  status                       String    @default("active")
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+
+  school           School                     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff            Staff?                     @relation(fields: [staffId], references: [id])
+  routeAssignments TransportRouteAssignment[]
+
+  @@index([schoolId, status])
+}
+
+model TransportStop {
+  id                 String   @id @default(cuid())
+  schoolId           String
+  name               String
+  code               String?
+  address            String?
+  landmark           String?
+  latitude           Float?
+  longitude          Float?
+  distanceFromSchool Float?
+  status             String   @default("active")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  school            School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  routeStops        TransportRouteStop[]
+  studentPickups    StudentTransport[]   @relation("StudentTransportPickup")
+  studentDrops      StudentTransport[]   @relation("StudentTransportDrop")
+
+  @@unique([schoolId, name])
+  @@index([schoolId, status])
+}
+
+/// `estimatedDurationMinutes` is one-way. Deliberately no `vehicleId`/`driverId`
+/// column here — see TransportRouteAssignment.
+model TransportRoute {
+  id                       String   @id @default(cuid())
+  schoolId                 String
+  name                     String
+  routeNumber              String?
+  startingPoint            String?
+  destination              String?
+  totalDistanceKm          Float?
+  estimatedDurationMinutes Int?
+  morningTiming            String?
+  afternoonTiming          String?
+  status                   String   @default("active")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  school            School                     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  stops             TransportRouteStop[]
+  assignments       TransportRouteAssignment[]
+  studentTransports StudentTransport[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId, status])
+}
+
+/// Ordered stop list for a route. `sequenceOrder` starts at 1; reordering
+/// rewrites the sequence numbers of affected rows rather than leaving gaps.
+model TransportRouteStop {
+  id            String   @id @default(cuid())
+  routeId       String
+  stopId        String
+  sequenceOrder Int
+  pickupTime    String?
+  dropTime      String?
+  createdAt     DateTime @default(now())
+
+  route TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  stop  TransportStop  @relation(fields: [stopId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, stopId])
+  @@index([routeId, sequenceOrder])
+}
+
+/// A route's *current* vehicle/driver is "the assignment row with no
+/// `effectiveTo`," never a mutable pointer a UI bug could desync from
+/// reality — same StaffTransfer-shaped from/to-with-effective-date history.
+/// Reassigning writes a new row and closes the previous one in the same
+/// transaction.
+model TransportRouteAssignment {
+  id          String    @id @default(cuid())
+  schoolId    String
+  routeId     String
+  vehicleId   String
+  driverId    String
+  startDate   DateTime
+  effectiveTo DateTime?
+  note        String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  school  School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  route   TransportRoute   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  vehicle TransportVehicle @relation(fields: [vehicleId], references: [id])
+  driver  TransportDriver  @relation(fields: [driverId], references: [id])
+
+  @@index([routeId, effectiveTo])
+  @@index([schoolId])
+}
+
+/// Supersedes `Student.busNumber`/`route`/`pickupPoint` (those columns stay
+/// for now — see TRANSPORT-ROADMAP.md Phase 4 backfill note; they are live,
+/// edited, exported data, not empty placeholders). `direction`: one_way | two_way.
+model StudentTransport {
+  id           String    @id @default(cuid())
+  schoolId     String
+  studentId    String
+  routeId      String
+  pickupStopId String
+  dropStopId   String?
+  direction    String    @default("two_way")
+  startDate    DateTime
+  endDate      DateTime?
+  status       String    @default("active")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  school     School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student    Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  route      TransportRoute @relation(fields: [routeId], references: [id])
+  pickupStop TransportStop  @relation("StudentTransportPickup", fields: [pickupStopId], references: [id])
+  dropStop   TransportStop? @relation("StudentTransportDrop", fields: [dropStopId], references: [id])
+
+  @@index([schoolId, status])
+  @@index([studentId])
+  @@index([routeId])
+}
+
+// ---------------------------------------------------------------------------
+// Timetable
+// ---------------------------------------------------------------------------
+
+/// A reusable named set of period slots (e.g. "Primary Timing", "Saturday"),
+/// assigned to a Timetable. See src/lib/timetable/generator.ts for how these
+/// combine with SubjectAssignment.periodsPerWeek to produce a schedule.
+model TimingSet {
+  id        String   @id @default(cuid())
+  schoolId  String
+  name      String
+  createdAt DateTime @default(now())
+
+  school     School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  periods    Period[]
+  timetables Timetable[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+/// One slot inside a TimingSet, in display order. Only kind="teaching" rows
+/// are eligible placements for the generator; break/lunch/assembly exist
+/// purely for grid display.
+/// `kind`: teaching | break | lunch | assembly
+model Period {
+  id          String @id @default(cuid())
+  schoolId    String
+  timingSetId String
+  sortOrder   Int
+  label       String
+  /// "08:20" — SQLite has no time type; always zero-padded HH:MM, compared as strings.
+  startTime String
+  endTime   String
+  kind      String @default("teaching")
+
+  school               School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  timingSet            TimingSet               @relation(fields: [timingSetId], references: [id], onDelete: Cascade)
+  slots                TimetableSlot[]
+  teacherUnavailability TeacherUnavailability[]
+
+  @@index([timingSetId])
+  @@index([schoolId])
+}
+
+/// A physical room. `allowedSubjectIdsJson` null = any subject may use it;
+/// otherwise a JSON array of Subject ids (labs restricted to their subject).
+/// `roomType`: classroom | lab | activity | other
+model Room {
+  id                    String   @id @default(cuid())
+  schoolId              String
+  campusId              String?
+  name                  String
+  buildingName          String?
+  floor                 String?
+  capacity              Int?
+  roomType              String   @default("classroom")
+  allowedSubjectIdsJson String?
+  status                String   @default("active")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  school              School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  campus              Campus?             @relation(fields: [campusId], references: [id])
+  slots               TimetableSlot[]
+  preferredBySubjects SubjectAssignment[]
+
+  @@index([schoolId])
+  @@index([campusId])
+}
+
+/// A teacher blackout the generator must never schedule into.
+/// `periodId` null = unavailable the entire day.
+model TeacherUnavailability {
+  id        String   @id @default(cuid())
+  schoolId  String
+  staffId   String
+  dayOfWeek String
+  periodId  String?
+  createdAt DateTime @default(now())
+
+  school School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  staff  Staff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  period Period? @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, dayOfWeek, periodId])
+  @@index([schoolId])
+}
+
+/// The container for one generated/maintained timetable — a date range on one
+/// TimingSet, covering a set of classes (via TimetableClass).
+/// `status`: draft | published | archived
+model Timetable {
+  id             String   @id @default(cuid())
+  schoolId       String
+  academicYearId String
+  name           String
+  startDate      DateTime
+  endDate        DateTime
+  timingSetId    String
+  /// JSON array of weekday strings this timetable runs on — defaults from
+  /// School.workingDaysJson at creation, editable narrower per timetable.
+  workingDaysJson String
+  status          String   @default("draft")
+  /// Snapshot of the last generate run's report (placed/unplaced/score), so
+  /// the unassigned-periods view survives a refresh without re-running.
+  lastGenerationReportJson String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  school       School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear     @relation(fields: [academicYearId], references: [id])
+  timingSet    TimingSet        @relation(fields: [timingSetId], references: [id])
+  classes      TimetableClass[]
+  slots        TimetableSlot[]
+
+  @@index([schoolId])
+  @@index([academicYearId])
+}
+
+/// Which classes/sections a Timetable covers. `sectionId` null = every
+/// section of that class (resolved at generation time — same convention
+/// SubjectAssignment already uses).
+model TimetableClass {
+  id          String  @id @default(cuid())
+  timetableId String
+  classId     String
+  sectionId   String?
+
+  timetable Timetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  class     Class     @relation(fields: [classId], references: [id])
+  section   Section?  @relation(fields: [sectionId], references: [id])
+
+  @@unique([timetableId, classId, sectionId])
+}
+
+/// One placed cell in the timetable grid. DB uniqueness enforces "one subject
+/// per section per day/period"; teacher/room clash-freedom is enforced in
+/// application code (src/lib/timetable/*), the same way "only one active
+/// AcademicYear" is — SQLite has no partial-unique-index support via Prisma.
+/// `source`: auto | manual — regenerating a timetable never touches manual rows.
+model TimetableSlot {
+  id          String   @id @default(cuid())
+  schoolId    String
+  timetableId String
+  sectionId   String
+  dayOfWeek   String
+  periodId    String
+  subjectId   String
+  teacherId   String?
+  roomId      String?
+  source      String   @default("auto")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  timetable Timetable @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+  section   Section   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  period    Period    @relation(fields: [periodId], references: [id])
+  subject   Subject   @relation(fields: [subjectId], references: [id])
+  teacher   Staff?    @relation(fields: [teacherId], references: [id])
+  room      Room?     @relation(fields: [roomId], references: [id])
+
+  @@unique([timetableId, sectionId, dayOfWeek, periodId])
+  @@index([timetableId, teacherId, dayOfWeek, periodId])
+  @@index([timetableId, roomId, dayOfWeek, periodId])
+  @@index([schoolId])
+}
+
+// ---------------------------------------------------------------------------
+// WhatsApp Communication & Bulk Messaging — see WHATSAPP-ROADMAP.md.
+// Every table carries schoolId, queried through it exactly like every other
+// tenant-scoped model. `createdById` is stored as a plain id (no Prisma
+// relation), matching the AuditLog/AiAuditLog convention, not a FK.
+// ---------------------------------------------------------------------------
+
+/// One WhatsApp connection per school. `provider` selects the implementation
+/// getWhatsAppProvider() resolves to (src/lib/whatsapp/registry.ts) — today
+/// only "mock" exists; a real Baileys/Meta Cloud API provider is a new value
+/// here plus a new class, with zero changes to the campaign engine.
+///
+/// `status`: disconnected | connecting | connected | logged_out | expired
+model WhatsAppAccount {
+  id                    String    @id @default(cuid())
+  schoolId              String    @unique
+  /// mock | baileys | meta_cloud_api — only "mock" ships in this build.
+  provider              String    @default("mock")
+  status                String    @default("disconnected")
+  phoneNumber           String?
+  displayName           String?
+  businessName          String?
+  /// Ephemeral — cleared once connected or once the code expires.
+  qrCodeDataUrl         String?
+  qrGeneratedAt         DateTime?
+  /// Opaque provider session/credential blob. The mock provider stores a fake
+  /// token here; a real Baileys provider would serialize its multi-file auth
+  /// state here instead, and a Meta Cloud API provider would store its access
+  /// token + WABA id here instead of an env var — this field is why account
+  /// state is DB-based, per-school, not env-based like src/lib/mail.ts.
+  sessionDataJson       String?
+  connectedAt           DateTime?
+  disconnectedAt        DateTime?
+  lastActivityAt        DateTime?
+  /// Simulated daily send counter, reset when dailyMessageCountDate rolls over
+  /// — cosmetic today, becomes real rate-limiting once a real provider lands.
+  dailyMessageCount     Int       @default(0)
+  dailyMessageCountDate DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+/// The WhatsApp address book. Either traceable to the student roster
+/// (studentId/guardianId set, source = "student_guardian") or a standalone
+/// entry from manual add or Excel import. `phoneE164` is the true dedupe key
+/// — one contact per phone per school — so ERP-resolved audiences (fee
+/// defaulters, class parents) and imported/manual contacts converge onto the
+/// same opt-out state instead of each audience mode tracking consent itself.
+///
+/// `source`: manual | import | student_guardian
+model WhatsAppContact {
+  id               String    @id @default(cuid())
+  schoolId         String
+  studentId        String?
+  guardianId       String?
+  source           String    @default("manual")
+  name             String
+  /// Normalized E.164-ish form (+91XXXXXXXXXX) — see src/lib/whatsapp/phone.ts.
+  phoneE164        String
+  /// As entered/imported, kept for reference when normalization had to guess.
+  rawPhone         String?
+  /// JSON array of free-text tags, e.g. ["alumni","donor"] — SQLite has no array type.
+  tagsJson         String?
+  /// JSON object of extra Excel columns not mapped to a known field, e.g.
+  /// {"donorLevel":"Gold"} — read by the personalization engine as
+  /// {{contact.custom.donorLevel}}.
+  customFieldsJson String?
+  optedOut         Boolean   @default(false)
+  optedOutAt       DateTime?
+  optedOutReason   String?
+  isActive         Boolean   @default(true)
+  notes            String?
+  createdById      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  school   School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student  Student?          @relation(fields: [studentId], references: [id])
+  guardian Guardian?         @relation(fields: [guardianId], references: [id])
+  jobs     WhatsAppMessageJob[]
+  chats    WhatsAppChat[]
+
+  @@unique([schoolId, phoneE164])
+  @@index([schoolId, studentId])
+  @@index([schoolId, guardianId])
+  @@index([schoolId, isActive])
+}
+
+/// A reusable message with {{variable}} tokens — see src/lib/whatsapp/personalize.ts.
+/// `variablesJson` is a cache of the tokens found in `bodyText`, recomputed on
+/// every save, so template pickers can show "uses: student.name, fee.dueDate"
+/// without re-parsing the body on every render.
+///
+/// `category`: fee_reminder | attendance | exam | event | admission | general | custom
+model WhatsAppTemplate {
+  id            String   @id @default(cuid())
+  schoolId      String
+  name          String
+  category      String   @default("general")
+  bodyText      String
+  variablesJson String?
+  isActive      Boolean  @default(true)
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school    School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  campaigns WhatsAppCampaign[]
+
+  @@index([schoolId, isActive])
+  @@index([schoolId, category])
+}
+
+/// One bulk send. `messageBody` is the template text (or ad hoc custom text)
+/// as chosen at creation, still carrying {{tokens}} — per-recipient
+/// personalization happens once at send-confirmation time and is snapshotted
+/// onto each WhatsAppMessageJob.messageText, so editing the template later
+/// never changes what history says was actually sent.
+///
+/// `audienceMode`: manual_contacts | tag | class_parents | fee_defaulters |
+///   low_attendance_parents | all_guardians | imported_list
+/// `status`: draft | sending | completed | cancelled
+model WhatsAppCampaign {
+  id                  String    @id @default(cuid())
+  schoolId            String
+  name                String
+  templateId          String?
+  messageBody         String
+  audienceMode        String
+  /// The params used to resolve the audience (classId/sectionId/thresholdPct/
+  /// tag/contactIds/...), so a campaign's audience is reproducible/auditable.
+  audienceFilterJson  String?
+  status              String    @default("draft")
+  totalRecipients     Int       @default(0)
+  sentCount           Int       @default(0)
+  failedCount         Int       @default(0)
+  invalidNumberCount  Int       @default(0)
+  optedOutCount       Int       @default(0)
+  skippedCount        Int       @default(0)
+  startedAt           DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  createdById         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  school   School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  template WhatsAppTemplate?    @relation(fields: [templateId], references: [id])
+  jobs     WhatsAppMessageJob[]
+
+  @@index([schoolId, status])
+  @@index([schoolId, createdAt])
+}
+
+/// One message to one recipient — simultaneously the worker's queue row
+/// (claimed via `status`) and the permanent history row (never deleted).
+///
+/// `status`: PENDING | PROCESSING | SENT | FAILED | RETRYING | CANCELLED |
+///   SKIPPED | INVALID_NUMBER | OPTED_OUT — INVALID_NUMBER/OPTED_OUT/SKIPPED
+///   are decided once at enqueue and never reach the worker; RETRYING is a
+///   transient auto-retry-with-backoff state (see nextAttemptAt), distinct
+///   from a manual retry (which re-enters at PENDING). See
+///   src/lib/whatsapp/worker.ts for the full state machine.
+model WhatsAppMessageJob {
+  id                String    @id @default(cuid())
+  schoolId          String
+  campaignId        String
+  contactId         String?
+  studentId         String?
+  guardianId        String?
+  recipientName     String
+  phoneE164         String
+  /// The fully personalized text actually sent — an immutable snapshot.
+  messageText       String
+  /// The resolved {{key: value}} map used to build messageText, for
+  /// debugging/audit — not re-derived from live data after the fact.
+  variablesJson     String?
+  status            String    @default("PENDING")
+  attempts          Int       @default(0)
+  lastError         String?
+  /// Set when status = RETRYING; the worker won't reclaim the row before this.
+  nextAttemptAt     DateTime?
+  providerMessageId String?
+  queuedAt          DateTime  @default(now())
+  sentAt            DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  school   School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  campaign WhatsAppCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact  WhatsAppContact?  @relation(fields: [contactId], references: [id])
+  student  Student?          @relation(fields: [studentId], references: [id])
+  guardian Guardian?         @relation(fields: [guardianId], references: [id])
+
+  @@index([schoolId, campaignId, status])
+  @@index([campaignId, status])
+  @@index([schoolId, phoneE164])
+  @@index([schoolId, createdAt])
+}
+
+/// One conversation thread with one phone number on this school's connected
+/// WhatsApp number — the real chat list, not the campaign-sent log
+/// (WhatsAppMessageJob). Only 1:1 chats are tracked; WhatsApp groups are not.
+model WhatsAppChat {
+  id                 String    @id @default(cuid())
+  schoolId           String
+  contactId          String?
+  phoneE164          String
+  name               String
+  /// Real WhatsApp profile picture URL (sock.profilePictureUrl) — fetched once when the chat is first seen, not refreshed after.
+  avatarUrl          String?
+  lastMessageAt      DateTime?
+  lastMessagePreview String?
+  lastMessageFromMe  Boolean   @default(false)
+  unreadCount        Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  school   School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  contact  WhatsAppContact?      @relation(fields: [contactId], references: [id])
+  messages WhatsAppChatMessage[]
+
+  @@unique([schoolId, phoneE164])
+  @@index([schoolId, lastMessageAt])
+}
+
+/// One message within a WhatsAppChat thread, either direction — a reply and
+/// the campaign/inbox message it replies to land in the same thread, the way
+/// the real WhatsApp app on the connected phone would show them.
+///
+/// `direction`: in | out
+/// `messageType`: text | image | video | audio | document | sticker | location | contact | other
+///   — only `text` carries real content; the rest store a readable
+///   placeholder ("📷 Photo", "🎤 Voice message"...) since this inbox doesn't
+///   download/render media.
+/// `status` (outbound only): pending | sent | delivered | read | failed
+model WhatsAppChatMessage {
+  id                String   @id @default(cuid())
+  schoolId          String
+  chatId            String
+  direction         String
+  messageType       String   @default("text")
+  text              String
+  status            String?
+  providerMessageId String?
+  sentAt            DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  school School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  chat   WhatsAppChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, chatId, sentAt])
+}
+
+// ---------------------------------------------------------------------------
+// Gmail Email Campaigns — see EMAIL-ROADMAP.md. Every table carries schoolId,
+// queried through it exactly like every other tenant-scoped model.
+// ---------------------------------------------------------------------------
+
+/// One Gmail connection per school, via Google OAuth 2.0 — never a password.
+/// Tokens are AES-256-GCM encrypted at rest (src/lib/email-campaigns/token-crypto.ts)
+/// and never sent to the frontend; every route reads through
+/// src/lib/email-campaigns/gmail-provider.ts, never this table directly.
+///
+/// `status`: connected | disconnected | reauth_required | error
+model GmailConnection {
+  id                    String    @id @default(cuid())
+  schoolId              String    @unique
+  googleUserId          String
+  email                 String
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String
+  tokenExpiry           DateTime?
+  /// JSON array of granted OAuth scopes, as Google returned them.
+  scopesJson            String?
+  status                String    @default("disconnected")
+  lastError             String?
+  dailyMessageCount     Int       @default(0)
+  dailyMessageCountDate DateTime?
+  connectedAt           DateTime?
+  disconnectedAt        DateTime?
+  lastUsedAt            DateTime?
+  createdById           String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+/// A reusable email with {{variable}} tokens in both subject and body — see
+/// src/lib/communication/personalize.ts (shared with the WhatsApp module).
+///
+/// `category`: fee | attendance | exam | result | ptm | homework |
+///   announcement | holiday | general | custom
+model EmailTemplate {
+  id            String   @id @default(cuid())
+  schoolId      String
+  name          String
+  description   String?
+  category      String   @default("general")
+  subject       String
+  /// Sanitized HTML (src/lib/email-campaigns/sanitize.ts) — never trust as safe before that step.
+  bodyHtml      String
+  /// Plain-text fallback, derived from bodyHtml unless the admin edits it separately.
+  bodyText      String
+  variablesJson String?
+  isActive      Boolean  @default(true)
+  createdById   String?
+  updatedById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school    School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  campaigns EmailCampaign[]
+
+  @@index([schoolId, isActive])
+  @@index([schoolId, category])
+}
+
+/// One bulk send. subject/bodyHtml/bodyText are snapshotted from the template
+/// (or composed ad hoc) at creation, still carrying {{tokens}} —
+/// per-recipient personalization happens once at confirmed-send time and is
+/// captured on each EmailJob, so editing the template later never changes
+/// what history says was actually sent.
+///
+/// `recipientType`: all_students | selected_students | classes | sections |
+///   fee_defaulters | parents | teachers | staff | imported_list
+/// `status`: draft | ready | scheduled | queued | processing | completed |
+///   partially_completed | failed | cancelled
+model EmailCampaign {
+  id                  String    @id @default(cuid())
+  schoolId            String
+  name                String
+  templateId          String?
+  senderEmail         String?
+  subject             String
+  bodyHtml            String
+  bodyText            String
+  recipientType       String
+  /// The params used to resolve recipients (classId/sectionId/minPendingAmount/
+  /// contactIds/...), so a campaign's audience is reproducible/auditable.
+  audienceFilterJson  String?
+  status              String    @default("draft")
+  totalRecipients     Int       @default(0)
+  sentCount           Int       @default(0)
+  failedCount         Int       @default(0)
+  cancelledCount      Int       @default(0)
+  skippedCount        Int       @default(0)
+  invalidCount        Int       @default(0)
+  scheduledAt         DateTime?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  createdById         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  school      School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  template    EmailTemplate?          @relation(fields: [templateId], references: [id])
+  jobs        EmailJob[]
+  attachments EmailCampaignAttachment[]
+
+  @@index([schoolId, status])
+  @@index([schoolId, createdAt])
+  @@index([schoolId, scheduledAt])
+}
+
+/// One message to one recipient — simultaneously the worker's queue row
+/// (claimed via `status`) and the permanent history row (never deleted).
+/// The (campaignId, recipientEmail) uniqueness is the idempotency key: a
+/// retried enqueue can never create a second job for the same recipient.
+///
+/// `status`: PENDING | PROCESSING | SENT | FAILED | RETRYING | CANCELLED |
+///   SKIPPED | INVALID_RECIPIENT
+model EmailJob {
+  id                String    @id @default(cuid())
+  schoolId          String
+  campaignId        String
+  studentId         String?
+  recipientEmail    String
+  recipientName     String
+  subject           String
+  renderedHtml      String
+  renderedText      String
+  status            String    @default("PENDING")
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(5)
+  lastError         String?
+  /// RETRYABLE | NON_RETRYABLE | AUTH_ERROR | RATE_LIMIT | INVALID_RECIPIENT | NETWORK_ERROR | PROVIDER_ERROR
+  lastErrorType     String?
+  providerMessageId String?
+  nextAttemptAt     DateTime?
+  queuedAt          DateTime  @default(now())
+  startedAt         DateTime?
+  sentAt            DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  school   School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  campaign EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  student  Student?      @relation(fields: [studentId], references: [id])
+
+  @@unique([campaignId, recipientEmail])
+  @@index([schoolId, campaignId, status])
+  @@index([campaignId, status])
+  @@index([schoolId, recipientEmail])
+  @@index([schoolId, studentId])
+  @@index([schoolId, createdAt])
+  @@index([providerMessageId])
+}
+
+/// An address that must never receive a campaign email again — an explicit
+/// unsubscribe/suppression list, checked by every audience resolution before
+/// a job is created (never after).
+model EmailSuppression {
+  id        String   @id @default(cuid())
+  schoolId  String
+  email     String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, email])
+}
+
+/// Links a campaign to a shared static attachment via the existing
+/// UploadedFile system — the same file goes to every recipient of this
+/// campaign. Per-student personalized attachments (report cards, receipts)
+/// are a deliberately unbuilt extension point — see
+/// src/lib/email-campaigns/attachment-resolver.ts.
+model EmailCampaignAttachment {
+  id             String   @id @default(cuid())
+  schoolId       String
+  campaignId     String
+  uploadedFileId String
+  createdAt      DateTime @default(now())
+
+  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  campaign     EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  uploadedFile UploadedFile  @relation(fields: [uploadedFileId], references: [id])
+
+  @@index([schoolId, campaignId])
 }

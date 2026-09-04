@@ -32,7 +32,29 @@ function NewSectionForm() {
         onSubmit={async (input) => {
           const section = await sectionService.create(input);
           toast({ title: "Section created", variant: "success" });
-          router.push(`/school/sections/${section.id}`);
+          router.push(`/school/classes/${section.class.id}`);
+        }}
+        onSubmitMultiple={async (inputs) => {
+          const results = await Promise.allSettled(inputs.map((input) => sectionService.create(input)));
+          const succeeded = results.filter((r) => r.status === "fulfilled").length;
+          const failed = results.length - succeeded;
+
+          if (succeeded === 0) {
+            toast({ title: "Couldn't add any sections", description: "They may already exist for this class.", variant: "danger" });
+            return;
+          }
+
+          if (failed > 0) {
+            toast({
+              title: `${succeeded} of ${results.length} section(s) added`,
+              description: `${failed} couldn't be created — they may already exist for this class.`,
+              variant: "warning",
+            });
+          } else {
+            toast({ title: `${succeeded} section${succeeded === 1 ? "" : "s"} added`, variant: "success" });
+          }
+
+          router.push(`/school/classes/${inputs[0].classId}`);
         }}
       />
     </>

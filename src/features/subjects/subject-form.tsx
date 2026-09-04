@@ -7,7 +7,7 @@ import type { z } from "zod";
 import { subjectInputSchema, type SubjectInput } from "@/lib/validation/subject";
 
 type SubjectFormValues = z.input<typeof subjectInputSchema>;
-import { SUBJECT_TYPES, SUBJECT_TYPE_LABELS, SUBJECT_NATURE_TYPES, GRADING_SYSTEMS } from "@/lib/constants/school";
+import { SUBJECT_TYPES, SUBJECT_TYPE_LABELS, SUBJECT_NATURE_TYPES } from "@/lib/constants/school";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -105,48 +105,6 @@ export function SubjectForm({ defaultValues, onSubmit, submitLabel = "Add subjec
               />
             )}
           </FormField>
-          <FormField label="Description" className="sm:col-span-2" error={errors.description?.message}>
-            {(field) => <Textarea {...field} {...register("description")} rows={2} />}
-          </FormField>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Grading</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Maximum marks" error={errors.maxMarks?.message}>
-            {(field) => <Input {...field} {...register("maxMarks")} type="number" min={1} />}
-          </FormField>
-          <FormField label="Passing marks" error={errors.passingMarks?.message}>
-            {(field) => <Input {...field} {...register("passingMarks")} type="number" min={0} />}
-          </FormField>
-          <FormField label="Credits" error={errors.credits?.message}>
-            {(field) => <Input {...field} {...register("credits")} type="number" step="0.5" min={0} />}
-          </FormField>
-          <FormField label="Grading system" error={errors.gradingSystem?.message}>
-            {(field) => (
-              <Controller
-                name="gradingSystem"
-                control={control}
-                render={({ field: selectField }) => (
-                  <Select value={selectField.value} onValueChange={selectField.onChange}>
-                    <SelectTrigger id={field.id}>
-                      <SelectValue placeholder="Select grading system" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {GRADING_SYSTEMS.map((g) => (
-                        <SelectItem key={g} value={g}>
-                          {g}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            )}
-          </FormField>
           <FormField label="Status" error={errors.status?.message}>
             {(field) => (
               <Controller
@@ -165,6 +123,9 @@ export function SubjectForm({ defaultValues, onSubmit, submitLabel = "Add subjec
                 )}
               />
             )}
+          </FormField>
+          <FormField label="Description" className="sm:col-span-2" error={errors.description?.message}>
+            {(field) => <Textarea {...field} {...register("description")} rows={2} />}
           </FormField>
         </CardContent>
       </Card>

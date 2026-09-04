@@ -2,11 +2,12 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { Layers, Users, BookOpen, UserCog, Plus } from "lucide-react";
+import { Layers, Users, BookOpen, UserCog, Plus, UserPlus, Pencil, Trash2 } from "lucide-react";
 import { classService, type ClassTeacherEntry } from "@/services/classService";
 import { sectionService } from "@/services/sectionService";
 import { subjectService } from "@/services/subjectService";
 import { studentService } from "@/services/studentService";
+import { AssignTeacherToClassModal } from "@/features/subjects/assign-teacher-to-class-modal";
 import type { ClassRecord } from "@/types/class";
 import type { SectionRecord } from "@/types/section";
 import type { SubjectRecord } from "@/types/subject";
@@ -21,6 +22,9 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { LoadingState } from "@/components/ui/loading-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { toast } from "@/hooks/use-toast";
+import type { ApiError } from "@/services/studentService";
 
 export default function ClassDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -30,6 +34,9 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
   const [students, setStudents] = useState<StudentRecord[] | null>(null);
   const [teachers, setTeachers] = useState<ClassTeacherEntry[] | null>(null);
   const [error, setError] = useState(false);
+  const [assigningSubject, setAssigningSubject] = useState<SubjectRecord | null>(null);
+  const [deletingSection, setDeletingSection] = useState<SectionRecord | null>(null);
+  const [isDeletingSection, setIsDeletingSection] = useState(false);
 
   function load() {
     classService.get(id).then(setCls).catch(() => setError(true));
@@ -43,6 +50,21 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function confirmDeleteSection() {
+    if (!deletingSection) return;
+    setIsDeletingSection(true);
+    try {
+      await sectionService.remove(deletingSection.id);
+      toast({ title: "Section deleted", variant: "success" });
+      setDeletingSection(null);
+      load();
+    } catch (error) {
+      toast({ title: (error as ApiError)?.error ?? "Couldn't delete this section.", variant: "danger" });
+    } finally {
+      setIsDeletingSection(false);
+    }
+  }
 
   if (error) return <ErrorState className="mx-auto max-w-5xl px-6 py-16" onRetry={load} />;
   if (!cls) return <LoadingState className="mx-auto max-w-5xl px-6 py-16" />;
@@ -70,6 +92,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard label="Sections" value={cls.counts?.sections ?? 0} icon={Layers} />
+        <StatCard label="Teachers" value={teachers?.length ?? 0} icon={UserCog} />
         <StatCard
           label="Students"
           value={cls.capacity ? `${cls.counts?.students ?? 0} / ${cls.capacity}` : cls.counts?.students ?? 0}
@@ -78,15 +101,14 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
           description={utilization !== null ? `${utilization}% capacity` : undefined}
         />
         <StatCard label="Subjects" value={subjects?.length ?? 0} icon={BookOpen} />
-        <StatCard label="Teachers" value={teachers?.length ?? 0} icon={UserCog} />
       </div>
 
       <Tabs defaultValue="sections">
         <TabsList>
           <TabsTrigger value="sections">Sections</TabsTrigger>
+          <TabsTrigger value="teachers">Teachers</TabsTrigger>
           <TabsTrigger value="students">Students</TabsTrigger>
           <TabsTrigger value="subjects">Subjects</TabsTrigger>
-          <TabsTrigger value="teachers">Teachers</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sections">
@@ -118,6 +140,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                 <TableHeader>
                   <TableRow>
                     <TableHead>Section</TableHead>
+                    <TableHead>Section Code</TableHead>
                     <TableHead>Room</TableHead>
                     <TableHead>Class Teacher</TableHead>
                     <TableHead>Students</TableHead>
@@ -128,6 +151,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                   {sections.map((section) => (
                     <TableRow key={section.id}>
                       <TableCell className="font-medium">{section.name}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{section.code}</TableCell>
                       <TableCell>{section.room ?? "—"}</TableCell>
                       <TableCell>{section.classTeacher?.fullName ?? "—"}</TableCell>
                       <TableCell>
@@ -138,12 +162,52 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                         <Button asChild variant="ghost" size="sm">
                           <Link href={`/school/sections/${section.id}`}>View</Link>
                         </Button>
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href={`/school/sections/${section.id}/edit`}>
+                            <Pencil className="size-4" /> Edit
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-danger-600 hover:text-danger-600"
+                          onClick={() => setDeletingSection(section)}
+                        >
+                          <Trash2 className="size-4" /> Delete
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="teachers">
+          {!teachers ? (
+            <LoadingState className="py-8" />
+          ) : teachers.length === 0 ? (
+            <EmptyState icon={UserCog} title="No teachers assigned" description="Assign a class teacher or subject teachers." />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Designation</TableHead>
+                  <TableHead>Role</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {teachers.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-medium">{t.fullName}</TableCell>
+                    <TableCell>{t.designation}</TableCell>
+                    <TableCell>{t.subjects.join(", ")}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </TabsContent>
 
@@ -196,53 +260,60 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                 <TableRow>
                   <TableHead>Subject</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Teacher</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {subjects.map((subject) => (
-                  <TableRow key={subject.id}>
-                    <TableCell className="font-medium">{subject.name}</TableCell>
-                    <TableCell className="capitalize">{subject.subjectType.replace("_", " ")}</TableCell>
-                    <TableCell className="text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href={`/school/subjects/${subject.id}`}>View</Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </TabsContent>
-
-        <TabsContent value="teachers">
-          {!teachers ? (
-            <LoadingState className="py-8" />
-          ) : teachers.length === 0 ? (
-            <EmptyState icon={UserCog} title="No teachers assigned" description="Assign a class teacher or subject teachers." />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Designation</TableHead>
-                  <TableHead>Role</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {teachers.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="font-medium">{t.fullName}</TableCell>
-                    <TableCell>{t.designation}</TableCell>
-                    <TableCell>{t.subjects.join(", ")}</TableCell>
-                  </TableRow>
-                ))}
+                {subjects.map((subject) => {
+                  const subjectTeachers = (teachers ?? []).filter((t) => t.subjects.includes(subject.name));
+                  return (
+                    <TableRow key={subject.id}>
+                      <TableCell className="font-medium">{subject.name}</TableCell>
+                      <TableCell className="capitalize">{subject.subjectType.replace("_", " ")}</TableCell>
+                      <TableCell>
+                        {subjectTeachers.length > 0 ? subjectTeachers.map((t) => t.fullName).join(", ") : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm" onClick={() => setAssigningSubject(subject)}>
+                          <UserPlus className="size-4" /> Add teacher
+                        </Button>
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href={`/school/subjects/${subject.id}`}>View</Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
         </TabsContent>
       </Tabs>
+
+      {assigningSubject && (
+        <AssignTeacherToClassModal
+          subject={assigningSubject}
+          classId={id}
+          academicYearId={cls.academicYear.id}
+          onClose={() => setAssigningSubject(null)}
+          onAssigned={() => {
+            setAssigningSubject(null);
+            load();
+          }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={deletingSection !== null}
+        onOpenChange={(open) => !open && setDeletingSection(null)}
+        title={`Delete section ${deletingSection?.name ?? ""}?`}
+        description="This can't be undone. A section with students assigned to it can't be deleted — remove or reassign them first."
+        confirmLabel="Delete section"
+        variant="destructive"
+        isLoading={isDeletingSection}
+        onConfirm={confirmDeleteSection}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { LogOut, Moon, Settings, Sun, User } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -13,11 +14,17 @@ import {
 import { Avatar } from "@/components/ui/avatar";
 import { useCurrentUser } from "@/providers/user-provider";
 import { useTheme } from "@/providers/theme-provider";
-import { toast } from "@/hooks/use-toast";
 
 export function UserMenu() {
   const user = useCurrentUser();
   const { theme, toggleTheme } = useTheme();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <DropdownMenu>
@@ -56,12 +63,7 @@ export function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-danger-600 data-[highlighted]:bg-danger-50 data-[highlighted]:text-danger-600"
-          onSelect={() =>
-            toast({
-              title: "Sign out",
-              description: "Authentication isn't connected yet — this will sign you out once Phase 3 adds it.",
-            })
-          }
+          onSelect={() => void handleSignOut()}
         >
           <LogOut className="size-4" /> Sign out
         </DropdownMenuItem>

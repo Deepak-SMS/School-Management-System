@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, Plus, Building2, Download } from "lucide-react";
+import { Search, Plus, Building2, Download, Pencil, Trash2 } from "lucide-react";
 import { campusService } from "@/services/campusService";
-import type { CampusListResponse } from "@/types/campus";
+import type { CampusListResponse, CampusRecord } from "@/types/campus";
 import { CAMPUS_TYPE_LABELS } from "@/lib/constants/school";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { useCurrentUser } from "@/providers/user-provider";
@@ -17,6 +17,9 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { TableSkeleton } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { toast } from "@/hooks/use-toast";
+import type { ApiError } from "@/services/studentService";
 
 const PAGE_SIZE = 20;
 
@@ -24,6 +27,8 @@ export function CampusTable() {
   const user = useCurrentUser();
   const canCreate = hasPermission(user.role, "campuses", "create");
   const canExport = hasPermission(user.role, "campuses", "export");
+  const canEdit = hasPermission(user.role, "campuses", "edit");
+  const canDelete = hasPermission(user.role, "campuses", "delete");
 
   const [result, setResult] = useState<CampusListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,19 +36,39 @@ export function CampusTable() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
+  const [deleting, setDeleting] = useState<CampusRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  function load() {
+    setLoading(true);
+    setError(null);
+    campusService
+      .list({ q: search || undefined, status: status || undefined, page, pageSize: PAGE_SIZE })
+      .then(setResult)
+      .catch(() => setError("Couldn't load campuses."))
+      .finally(() => setLoading(false));
+  }
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setLoading(true);
-      setError(null);
-      campusService
-        .list({ q: search || undefined, status: status || undefined, page, pageSize: PAGE_SIZE })
-        .then(setResult)
-        .catch(() => setError("Couldn't load campuses."))
-        .finally(() => setLoading(false));
-    }, 250);
+    const timeout = setTimeout(load, 250);
     return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, status, page]);
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setIsDeleting(true);
+    try {
+      await campusService.remove(deleting.id);
+      toast({ title: "Campus deleted", variant: "success" });
+      setDeleting(null);
+      load();
+    } catch (e) {
+      toast({ title: (e as ApiError)?.error ?? "Couldn't delete the campus.", variant: "danger" });
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   const totalPages = result ? Math.max(1, Math.ceil(result.total / PAGE_SIZE)) : 1;
 
@@ -152,9 +177,28 @@ export function CampusTable() {
                     <Badge variant={campus.status === "active" ? "success" : "neutral"}>{campus.status}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={`/school/campuses/${campus.id}`}>View</Link>
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/school/campuses/${campus.id}`}>View</Link>
+                      </Button>
+                      {canEdit && (
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href={`/school/campuses/${campus.id}/edit`}>
+                            <Pencil className="size-4" /> Edit
+                          </Link>
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-danger-600 hover:bg-danger-50 hover:text-danger-600"
+                          onClick={() => setDeleting(campus)}
+                        >
+                          <Trash2 className="size-4" /> Delete
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -179,6 +223,17 @@ export function CampusTable() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        title={`Delete ${deleting?.name ?? "campus"}?`}
+        description="This can't be undone. Campuses with classes or departments assigned to them can't be deleted — deactivate them instead."
+        confirmLabel="Delete"
+        variant="destructive"
+        isLoading={isDeleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

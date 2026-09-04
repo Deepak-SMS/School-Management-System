@@ -6,9 +6,9 @@ import {
   UserCog,
   BookOpenCheck,
   Wallet,
-  Landmark,
   MessagesSquare,
   IdCard,
+  ScrollText,
   Library,
   Bus,
   BedDouble,
@@ -18,8 +18,9 @@ import {
   Sparkles,
   Settings,
   ClipboardCheck,
+  ClipboardList,
   CalendarClock,
-  FileText,
+  Newspaper,
 } from "lucide-react";
 import type { NavSection } from "@/types/navigation";
 import type { Role } from "@/types/user";
@@ -27,7 +28,7 @@ import type { Role } from "@/types/user";
 /** Full admin-side navigation tree. Filtered per-role at render time. */
 const adminNavigation: NavSection[] = [
   {
-    items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard }],
+    items: [{ label: "Dashboard", href: "/admin", icon: LayoutDashboard }],
   },
   {
     title: "School Management",
@@ -44,6 +45,24 @@ const adminNavigation: NavSection[] = [
       { label: "Database", href: "/school/database", roles: ["super_admin", "school_admin"] },
     ],
   },
+  /**
+   * Examination — deliberately its own top-level section, not one more link
+   * under Academics: it has the deepest sub-flow of anything in the sidebar
+   * (creation → schedule → marks → verification → results → report cards),
+   * per EXAM-ROADMAP.md §3. Placed directly below School Management since
+   * exam setup builds on the Academic Year/Class/Section configuration there.
+   * Only lists what's actually built (Phase 1) — Schedule/Marks/Verification/
+   * Results/Report Cards/Grading System arrive as later phases ship.
+   */
+  {
+    title: "Examination",
+    icon: ClipboardList,
+    roles: ["super_admin", "school_admin", "principal", "teacher", "hod"],
+    items: [
+      { label: "All Exams", href: "/exams" },
+      { label: "Exam Types", href: "/exams/types", roles: ["super_admin", "school_admin", "principal"] },
+    ],
+  },
   {
     title: "Admissions",
     icon: UserPlus,
@@ -52,6 +71,7 @@ const adminNavigation: NavSection[] = [
       { label: "Admission Enquiries", href: "/admissions/enquiries" },
       { label: "Applications", href: "/admissions/applications" },
       { label: "Admissions", href: "/admissions" },
+      { label: "Admission Reports", href: "/admissions/reports" },
       { label: "Enrollment", href: "/admissions/enrollment" },
       { label: "Admission Documents", href: "/admissions/documents" },
     ],
@@ -63,10 +83,11 @@ const adminNavigation: NavSection[] = [
     items: [
       { label: "All Students", href: "/students" },
       { label: "Student Groups", href: "/students/groups" },
+      { label: "Student Accounts", href: "/students/accounts", roles: ["super_admin", "school_admin", "principal"] },
+      { label: "Teacher Access", href: "/students/teacher-access", roles: ["super_admin", "school_admin", "principal"] },
+      { label: "My Classes & Subjects", href: "/students/my-classes", roles: ["teacher"] },
       { label: "Student Documents", href: "/students/documents" },
-      { label: "Student Promotion", href: "/students/promotion" },
-      { label: "Student Transfer", href: "/students/transfer" },
-      { label: "Alumni", href: "/students/alumni" },
+      { label: "Student Promotion", href: "/students/promotion", roles: ["super_admin", "school_admin", "principal"] },
     ],
   },
   {
@@ -78,8 +99,17 @@ const adminNavigation: NavSection[] = [
       { label: "Parent Accounts", href: "/parents/accounts" },
     ],
   },
+  /**
+   * HR & Payroll.
+   *
+   * One section rather than the three it used to be (HR Management /
+   * Recruitment / HR & Payroll), because they are one employee lifecycle:
+   * hire → onboard → attend → be paid → be appraised → leave. Items appear
+   * here as they are actually built — a link to a page that doesn't exist is
+   * worse than no link.
+   */
   {
-    title: "HR Management",
+    title: "HR & Payroll",
     icon: UserCog,
     roles: ["super_admin", "school_admin", "principal", "hr", "hr_staff", "hod", "accountant"],
     items: [
@@ -89,6 +119,14 @@ const adminNavigation: NavSection[] = [
       { label: "Departments", href: "/school/departments", roles: ["super_admin", "school_admin", "principal", "hr", "hr_staff"] },
       { label: "Designations", href: "/hr/designations", roles: ["super_admin", "school_admin", "principal", "hr", "hr_staff"] },
       { label: "Employee Types", href: "/hr/employee-types", roles: ["super_admin", "school_admin", "hr", "hr_staff"] },
+      { label: "Holiday & Work Calendar", href: "/hr/calendar", roles: ["super_admin", "school_admin", "principal", "hr", "hr_staff"] },
+      { label: "Employee Attendance", href: "/hr/attendance" },
+      { label: "Leave Management", href: "/hr/leave" },
+      // Payroll — see HR-PAYROLL-ROADMAP.md Phase 2 (components/structures/
+      // rules) + Phase 3 (periods/slips), both shipped in this pass. Visible
+      // only to roles actually granted the `payroll` permission.
+      { label: "Payroll", href: "/hr/payroll", roles: ["super_admin", "school_admin", "principal", "hr", "accountant"] },
+      { label: "Salary Slips", href: "/hr/salary-slips", roles: ["super_admin", "school_admin", "principal", "hr", "accountant"] },
     ],
   },
   {
@@ -103,20 +141,64 @@ const adminNavigation: NavSection[] = [
       { label: "Offers", href: "/hr/offers" },
     ],
   },
+  /**
+   * Attendance — its own top-level section per ATTENDANCE-ROADMAP.md §4,
+   * mirroring how Examination got pulled out of Academics rather than staying
+   * a nested link. Dashboard is open to teachers too (same figures the general
+   * `/admin` Dashboard already shows them); the admin-facing "browse any
+   * class and mark" screen is not — a teacher's equivalent is "My Classes &
+   * Subjects" (Students section), scoped to getTeacherScope().
+   */
+  {
+    title: "Attendance",
+    icon: ClipboardCheck,
+    roles: ["super_admin", "school_admin", "principal", "teacher"],
+    items: [
+      { label: "Dashboard", href: "/academics/attendance" },
+      {
+        label: "Mark Attendance",
+        href: "/academics/attendance/mark",
+        roles: ["super_admin", "school_admin", "principal"],
+      },
+      { label: "Student Calendar", href: "/academics/attendance/calendar" },
+      {
+        label: "Class Report",
+        href: "/academics/attendance/reports",
+        roles: ["super_admin", "school_admin", "principal"],
+      },
+      {
+        label: "Defaulters",
+        href: "/academics/attendance/defaulters",
+        roles: ["super_admin", "school_admin", "principal"],
+      },
+      {
+        label: "Settings",
+        href: "/academics/attendance/settings",
+        roles: ["super_admin", "school_admin", "principal"],
+      },
+    ],
+  },
   {
     title: "Academics",
     icon: BookOpenCheck,
     roles: ["super_admin", "school_admin", "principal", "teacher"],
     items: [
-      { label: "Attendance", href: "/academics/attendance", icon: ClipboardCheck },
-      { label: "Timetable", href: "/academics/timetable", icon: CalendarClock },
       { label: "Subjects", href: "/academics/subjects" },
+      { label: "Timetable", href: "/academics/timetable", icon: CalendarClock },
       { label: "Assignments", href: "/academics/assignments" },
       { label: "Homework", href: "/academics/homework" },
-      { label: "Examinations", href: "/academics/examinations" },
-      { label: "Gradebook", href: "/academics/gradebook" },
-      { label: "Results", href: "/academics/results" },
-      { label: "Report Cards", href: "/academics/report-cards" },
+    ],
+  },
+  {
+    title: "News Management",
+    icon: Newspaper,
+    roles: ["super_admin", "school_admin", "principal", "teacher"],
+    items: [
+      { label: "Dashboard", href: "/news" },
+      { label: "All News", href: "/news/all" },
+      { label: "Create News", href: "/news/new" },
+      { label: "Categories", href: "/news/categories" },
+      { label: "Comments & Moderation", href: "/news/comments" },
     ],
   },
   {
@@ -136,28 +218,25 @@ const adminNavigation: NavSection[] = [
     ],
   },
   {
-    title: "HR & Payroll",
-    icon: Landmark,
-    roles: ["super_admin", "school_admin", "hr"],
-    items: [
-      { label: "Employee Attendance", href: "/hr/attendance" },
-      { label: "Leave", href: "/hr/leave" },
-      { label: "Payroll", href: "/hr/payroll" },
-      { label: "Payslips", href: "/hr/payslips" },
-    ],
-  },
-  {
     title: "Communication",
     icon: MessagesSquare,
-    roles: ["super_admin", "school_admin", "principal", "teacher"],
+    roles: ["super_admin", "school_admin", "principal", "teacher", "accountant"],
     items: [
       { label: "Notifications", href: "/communication/notifications" },
-      { label: "SMS", href: "/communication/sms" },
-      { label: "Email", href: "/communication/email" },
-      { label: "WhatsApp", href: "/communication/whatsapp" },
+      { label: "SMS", href: "/communication/sms", roles: ["super_admin", "school_admin", "principal", "accountant"] },
+      { label: "Email", href: "/communication/email", roles: ["super_admin", "school_admin", "principal", "accountant"] },
+      { label: "Email Templates", href: "/communication/email/templates", roles: ["super_admin", "school_admin", "principal", "accountant"] },
+      { label: "Email Campaigns", href: "/communication/email/campaigns", roles: ["super_admin", "school_admin", "principal", "accountant"] },
+      { label: "Email Settings", href: "/communication/email/settings", roles: ["super_admin", "school_admin", "principal"] },
+      { label: "WhatsApp", href: "/communication/whatsapp", roles: ["super_admin", "school_admin", "principal", "accountant"] },
+      { label: "WhatsApp Contacts", href: "/communication/whatsapp/contacts", roles: ["super_admin", "school_admin", "principal"] },
+      { label: "WhatsApp Templates", href: "/communication/whatsapp/templates", roles: ["super_admin", "school_admin", "principal", "accountant"] },
+      { label: "WhatsApp Campaigns", href: "/communication/whatsapp/campaigns", roles: ["super_admin", "school_admin", "principal", "accountant"] },
+      { label: "WhatsApp Inbox", href: "/communication/whatsapp/inbox", roles: ["super_admin", "school_admin", "principal"] },
+      { label: "WhatsApp History", href: "/communication/whatsapp/history", roles: ["super_admin", "school_admin", "principal", "accountant"] },
       { label: "Push Notifications", href: "/communication/push" },
       { label: "Internal Messages", href: "/communication/messages" },
-      { label: "Announcements", href: "/communication/announcements" },
+      { label: "Announcements", href: "/communication/announcements", roles: ["super_admin", "school_admin", "principal", "accountant"] },
     ],
   },
   {
@@ -176,15 +255,25 @@ const adminNavigation: NavSection[] = [
     ],
   },
   {
+    title: "Certificate Management",
+    icon: ScrollText,
+    roles: ["super_admin", "school_admin", "principal", "hr", "hr_staff"],
+    items: [
+      { label: "Dashboard", href: "/certificates" },
+      { label: "Certificate Types", href: "/certificates/types", roles: ["super_admin", "school_admin", "principal"] },
+      { label: "Designer", href: "/certificates/designer", roles: ["super_admin", "school_admin", "principal"] },
+      { label: "Generate Certificate", href: "/certificates/generate" },
+      { label: "Generated Certificates", href: "/certificates/generated" },
+    ],
+  },
+  {
     title: "Library",
     icon: Library,
-    roles: ["super_admin", "school_admin", "librarian"],
+    roles: ["super_admin", "school_admin", "principal", "librarian"],
     items: [
-      { label: "Books", href: "/library/books" },
-      { label: "Categories", href: "/library/categories" },
-      { label: "Members", href: "/library/members" },
-      { label: "Issue / Return", href: "/library/issue-return" },
-      { label: "Fines", href: "/library/fines" },
+      { label: "Dashboard", href: "/library" },
+      { label: "Catalogue", href: "/library/catalogue" },
+      { label: "Settings", href: "/library/settings", roles: ["super_admin", "school_admin", "librarian"] },
     ],
   },
   {
@@ -258,9 +347,17 @@ const adminNavigation: NavSection[] = [
     roles: ["super_admin", "school_admin", "principal", "teacher"],
     items: [
       { label: "AI School Assistant", href: "/ai/assistant" },
-      { label: "AI Analytics", href: "/ai/analytics" },
-      { label: "AI Report Generator", href: "/ai/report-generator" },
-      { label: "AI Communication Assistant", href: "/ai/communication-assistant" },
+      { label: "AI Analytics", href: "/ai/analytics", roles: ["super_admin", "school_admin", "principal"] },
+      {
+        label: "AI Report Generator",
+        href: "/ai/report-generator",
+        roles: ["super_admin", "school_admin", "principal"],
+      },
+      {
+        label: "AI Communication Assistant",
+        href: "/ai/communication-assistant",
+        roles: ["super_admin", "school_admin", "principal"],
+      },
     ],
   },
   {
@@ -279,27 +376,47 @@ const adminNavigation: NavSection[] = [
   },
 ];
 
-/** Separate, deliberately short IA for the parent/student portal (section 27). */
+/**
+ * Separate, deliberately short IA for the parent/student portal (section 27).
+ *
+ * Only lists what's actually built (PARENT-STUDENT-PORTAL-ROADMAP.md Phase C)
+ * — Results, Assignments, and Messages need models that don't exist yet
+ * (Phase D) and are deliberately left off rather than linking to a 404, same
+ * discipline the HR & Payroll section above follows. A single flat list (no
+ * section titles) so it maps directly onto the portal's bottom tab bar.
+ */
 const portalNavigation: NavSection[] = [
   {
-    items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard }],
-  },
-  {
-    title: "My School",
     items: [
+      { label: "Dashboard", href: "/portal", icon: LayoutDashboard },
       { label: "Timetable", href: "/portal/timetable", icon: CalendarClock },
       { label: "Attendance", href: "/portal/attendance", icon: ClipboardCheck },
-      { label: "Results", href: "/portal/results", icon: FileText },
-      { label: "Assignments", href: "/portal/assignments", roles: ["student"] },
-      { label: "Fees", href: "/portal/fees", roles: ["parent"] },
+      { label: "Fees", href: "/portal/fees", icon: Wallet, roles: ["parent"] },
+      { label: "Transport", href: "/portal/transport", icon: Bus },
+      { label: "Certificates", href: "/portal/certificates", icon: ScrollText },
     ],
   },
+];
+
+/**
+ * Super Admin (platform-level) navigation — a third, separate IA alongside
+ * adminNavigation/portalNavigation, since a Super Admin manages the SaaS
+ * business (schools, not one school's records). Only lists what's actually
+ * built — no links to unbuilt Billing/Support/etc. pages.
+ */
+const platformNavigation: NavSection[] = [
   {
-    title: "Communication",
-    icon: MessagesSquare,
-    items: [{ label: "Messages", href: "/portal/messages" }],
+    items: [
+      { label: "Dashboard", href: "/super-admin", icon: LayoutDashboard },
+      { label: "Schools", href: "/super-admin/schools", icon: School },
+      { label: "Audit Log", href: "/super-admin/audit-log", icon: ScrollText },
+    ],
   },
 ];
+
+export function getPlatformNavigation(): NavSection[] {
+  return platformNavigation;
+}
 
 function filterSections(sections: NavSection[], role: Role): NavSection[] {
   return sections

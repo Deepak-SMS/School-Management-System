@@ -43,6 +43,7 @@ async function main() {
       id: "school_greenfield",
       name: "Greenfield International School",
       shortName: "Greenfield",
+      slug: "greenfield",
       ...schoolInfo,
     },
   });
@@ -166,6 +167,21 @@ async function main() {
   // LOCAL DEMO CREDENTIALS ONLY — this password is committed in plain text.
   // Production must seed accounts separately and force a password change.
   const DEMO_PASSWORD = "Password123!";
+
+  // Platform-level Super Admin — belongs to zero schools (see src/lib/platform-auth.ts),
+  // signs in separately at /super-admin/login.
+  await prisma.user.upsert({
+    where: { email: "superadmin@classlane.app" },
+    update: { passwordHash: hashPassword(DEMO_PASSWORD), isSuperAdmin: true },
+    create: {
+      name: "Platform Admin",
+      email: "superadmin@classlane.app",
+      isActive: true,
+      isSuperAdmin: true,
+      passwordHash: hashPassword(DEMO_PASSWORD),
+    },
+  });
+
   const demoAccounts = [
     { email: "admin@greenfieldschool.example", name: "Priya Deshmukh", role: "school_admin" },
     { email: "hr@greenfieldschool.example", name: "Aditi Rao", role: "hr" },
@@ -191,6 +207,78 @@ async function main() {
       update: { role: account.role },
       create: { userId: user.id, schoolId: school.id, role: account.role },
     });
+  }
+
+  // Demo parent/student portal logins, for exercising the portal locally
+  // (PARENT-STUDENT-PORTAL-ROADMAP.md Phase A-C). Linked to the first two
+  // seeded students (ADM001, ADM002) so the demo parent also has something to
+  // switch between.
+  const portalStudents = await prisma.student.findMany({
+    where: { schoolId: school.id, admissionNumber: { in: ["ADM001", "ADM002"] } },
+    include: { guardians: { include: { guardian: true }, orderBy: { sortOrder: "asc" } } },
+    orderBy: { admissionNumber: "asc" },
+  });
+
+  const [firstStudent] = portalStudents;
+  if (firstStudent) {
+    const studentUser = await prisma.user.upsert({
+      where: { email: "student@greenfieldschool.example" },
+      update: { passwordHash: hashPassword(DEMO_PASSWORD) },
+      create: {
+        name: `${firstStudent.firstName} ${firstStudent.lastName}`,
+        email: "student@greenfieldschool.example",
+        isActive: true,
+        passwordHash: hashPassword(DEMO_PASSWORD),
+      },
+    });
+    await prisma.schoolMembership.upsert({
+      where: { userId_schoolId: { userId: studentUser.id, schoolId: school.id } },
+      update: { role: "student" },
+      create: { userId: studentUser.id, schoolId: school.id, role: "student" },
+    });
+    await prisma.student.update({ where: { id: firstStudent.id }, data: { userId: studentUser.id } });
+
+    const primaryGuardianLink = firstStudent.guardians.find((g) => g.isPrimary) ?? firstStudent.guardians[0];
+    if (primaryGuardianLink) {
+      const parentUser = await prisma.user.upsert({
+        where: { email: "parent@greenfieldschool.example" },
+        update: { passwordHash: hashPassword(DEMO_PASSWORD) },
+        create: {
+          name: primaryGuardianLink.guardian.fullName,
+          email: "parent@greenfieldschool.example",
+          isActive: true,
+          passwordHash: hashPassword(DEMO_PASSWORD),
+        },
+      });
+      await prisma.schoolMembership.upsert({
+        where: { userId_schoolId: { userId: parentUser.id, schoolId: school.id } },
+        update: { role: "parent" },
+        create: { userId: parentUser.id, schoolId: school.id, role: "parent" },
+      });
+      await prisma.guardian.update({ where: { id: primaryGuardianLink.guardianId }, data: { userId: parentUser.id } });
+      await prisma.studentGuardian.update({ where: { id: primaryGuardianLink.id }, data: { canAccessPortal: true } });
+
+      // Also link this same guardian to the second seeded student, so the
+      // demo parent has more than one child to switch between.
+      const secondStudent = portalStudents[1];
+      if (secondStudent) {
+        const existingLink = await prisma.studentGuardian.findUnique({
+          where: { studentId_guardianId: { studentId: secondStudent.id, guardianId: primaryGuardianLink.guardianId } },
+        });
+        if (existingLink) {
+          await prisma.studentGuardian.update({ where: { id: existingLink.id }, data: { canAccessPortal: true } });
+        } else {
+          await prisma.studentGuardian.create({
+            data: {
+              studentId: secondStudent.id,
+              guardianId: primaryGuardianLink.guardianId,
+              relationship: primaryGuardianLink.relationship,
+              canAccessPortal: true,
+            },
+          });
+        }
+      }
+    }
   }
 
   const employeeTypeSeed = [
@@ -328,10 +416,67 @@ async function main() {
     }
   }
 
+  // Teacher-scope demo data: link the teacher demo login to a real Staff
+  // record, make her the class teacher of one section, and a subject
+  // teacher for two other classes — the two access levels the "My Classes &
+  // Subjects" teacher portal (and the admin "Teacher Access" overview) are
+  // built around. Independent of the `existingStaff === 0` guard above so
+  // re-running seed on an older database still fixes the link.
+  const mathsSubject = await prisma.subject.upsert({
+    where: { schoolId_code: { schoolId: school.id, code: "MATH" } },
+    update: {},
+    create: {
+      schoolId: school.id,
+      name: "Mathematics",
+      code: "MATH",
+      subjectType: "core",
+      natureType: "theory",
+      maxMarks: 100,
+      passingMarks: 33,
+    },
+  });
+
+  const meeraStaff = await prisma.staff.findFirst({ where: { schoolId: school.id, firstName: "Meera", lastName: "Kulkarni" } });
+  const teacherUser = await prisma.user.findUnique({ where: { email: "teacher@greenfieldschool.example" } });
+
+  if (meeraStaff && teacherUser) {
+    if (meeraStaff.userId !== teacherUser.id) {
+      await prisma.staff.update({ where: { id: meeraStaff.id }, data: { userId: teacherUser.id } });
+    }
+
+    const class6 = classes.find((c) => c.name === "Class 6");
+    const sectionA = class6 ? (sectionsByClass.get(class6.id) ?? []).find((s) => s.name === "A") : undefined;
+    if (sectionA) {
+      await prisma.section.update({ where: { id: sectionA.id }, data: { classTeacherId: meeraStaff.id } });
+    }
+
+    for (const className of ["Class 7", "Class 8"]) {
+      const cls = classes.find((c) => c.name === className);
+      if (!cls) continue;
+      const existingAssignment = await prisma.subjectAssignment.findFirst({
+        where: { subjectId: mathsSubject.id, academicYearId: academicYear.id, classId: cls.id, sectionId: null },
+      });
+      if (!existingAssignment) {
+        await prisma.subjectAssignment.create({
+          data: {
+            schoolId: school.id,
+            subjectId: mathsSubject.id,
+            academicYearId: academicYear.id,
+            classId: cls.id,
+            sectionId: null,
+            teacherId: meeraStaff.id,
+          },
+        });
+      }
+    }
+  }
+
   await seedSystemTemplates();
+  await seedCertificateTypesAndTemplates();
 
   console.log(`Seeded ${school.name}: ${classes.length} classes, 20 students, 8 staff (3 teachers + 5 staff).`);
   console.log(`\nDemo logins (password for all: ${DEMO_PASSWORD}):`);
+  console.log(`  ${"super_admin".padEnd(13)} superadmin@classlane.app (sign in at /super-admin/login)`);
   for (const account of demoAccounts) {
     console.log(`  ${account.role.padEnd(13)} ${account.email}`);
   }
@@ -478,6 +623,174 @@ async function seedSystemTemplates() {
   }
 
   console.log(`Seeded ${SYSTEM_TEMPLATES.length} system ID card templates.`);
+}
+
+// ---------------------------------------------------------------------------
+// Certificates: system certificate types + two ready-to-use A4 templates
+// ---------------------------------------------------------------------------
+
+const CERTIFICATE_TYPES: { key: string; name: string; category: "student" | "staff"; prefix: string; requiresApproval?: boolean }[] = [
+  { key: "bonafide", name: "Bonafide Certificate", category: "student", prefix: "BON" },
+  { key: "transfer_certificate", name: "Transfer Certificate", category: "student", prefix: "TC", requiresApproval: true },
+  { key: "migration_certificate", name: "Migration Certificate", category: "student", prefix: "MIG", requiresApproval: true },
+  { key: "character_certificate", name: "Character Certificate", category: "student", prefix: "CHAR" },
+  { key: "study_certificate", name: "Study Certificate", category: "student", prefix: "STUDY" },
+  { key: "school_leaving_certificate", name: "School Leaving Certificate", category: "student", prefix: "SLC", requiresApproval: true },
+  { key: "conduct_certificate", name: "Conduct Certificate", category: "student", prefix: "COND" },
+  { key: "attendance_certificate", name: "Attendance Certificate", category: "student", prefix: "ATT" },
+  { key: "course_completion_certificate", name: "Course Completion Certificate", category: "student", prefix: "CCC" },
+  { key: "merit_certificate", name: "Merit Certificate", category: "student", prefix: "MERIT" },
+  { key: "achievement_certificate", name: "Achievement Certificate", category: "student", prefix: "ACH" },
+  { key: "participation_certificate", name: "Participation Certificate", category: "student", prefix: "PART" },
+  { key: "sports_certificate", name: "Sports Certificate", category: "student", prefix: "SPORT" },
+  { key: "scholarship_certificate", name: "Scholarship Certificate", category: "student", prefix: "SCHOL" },
+  { key: "fee_clearance_certificate", name: "Fee Payment / Clearance Certificate", category: "student", prefix: "FEE" },
+  { key: "identity_certificate", name: "Identity / Enrollment Certificate", category: "student", prefix: "ID" },
+  { key: "admission_confirmation_certificate", name: "Admission Confirmation Certificate", category: "student", prefix: "ADM" },
+  { key: "gap_certificate", name: "Gap Certificate", category: "student", prefix: "GAP" },
+  { key: "experience_certificate", name: "Experience Certificate", category: "staff", prefix: "EXP" },
+  { key: "employment_certificate", name: "Employment Certificate", category: "staff", prefix: "EMPC" },
+  { key: "appointment_letter", name: "Appointment Letter", category: "staff", prefix: "APPT" },
+  { key: "offer_letter", name: "Offer Letter", category: "staff", prefix: "OFFER" },
+  { key: "relieving_letter", name: "Relieving Letter", category: "staff", prefix: "RELV", requiresApproval: true },
+  { key: "service_certificate", name: "Service Certificate", category: "staff", prefix: "SERV" },
+  { key: "salary_certificate", name: "Salary Certificate", category: "staff", prefix: "SAL" },
+  { key: "staff_bonafide_certificate", name: "Staff Bonafide Certificate", category: "staff", prefix: "SBON" },
+  { key: "promotion_letter", name: "Promotion Letter", category: "staff", prefix: "PROM" },
+  { key: "increment_letter", name: "Increment Letter", category: "staff", prefix: "INCR" },
+];
+
+async function seedCertificateTypesAndTemplates() {
+  const existing = await prisma.certificateType.count({ where: { isSystemType: true } });
+  if (existing === 0) {
+    await prisma.certificateType.createMany({
+      data: CERTIFICATE_TYPES.map((t) => ({
+        schoolId: null,
+        key: t.key,
+        name: t.name,
+        category: t.category,
+        numberingPrefix: t.prefix,
+        requiresApproval: Boolean(t.requiresApproval),
+        isSystemType: true,
+        isActive: true,
+      })),
+    });
+    console.log(`Seeded ${CERTIFICATE_TYPES.length} system certificate types.`);
+  }
+
+  const existingTemplates = await prisma.certificateTemplate.count({ where: { isSystemTemplate: true } });
+  if (existingTemplates > 0) return;
+
+  const bonafideType = await prisma.certificateType.findFirst({ where: { key: "bonafide", isSystemType: true } });
+  const tcType = await prisma.certificateType.findFirst({ where: { key: "transfer_certificate", isSystemType: true } });
+  if (!bonafideType || !tcType) return;
+
+  const labelValueRow = (label: string, fieldKey: string, y: number): ElementSeed[] => [
+    { side: "front", type: "text", content: label, x: 25, y, width: 40, height: 5.5, fontSize: 5.5, color: "#374151" },
+    { side: "front", type: "dynamic_field", fieldKey, x: 68, y, width: 100, height: 5.5, fontSize: 5.5, fontWeight: "bold", color: "#111827" },
+  ];
+
+  await prisma.certificateTemplate.create({
+    data: {
+      schoolId: null,
+      isSystemTemplate: true,
+      certificateTypeId: bonafideType.id,
+      name: "Classic Bonafide",
+      pageWidthMm: 210,
+      pageHeightMm: 297,
+      orientation: "portrait",
+      isDefault: true,
+      isActive: true,
+      elements: {
+        create: [
+          { side: "front", type: "shape", x: 0, y: 0, width: 210, height: 297, backgroundColor: "#ffffff", zIndex: 0 },
+          { side: "front", type: "logo", fieldKey: "school.logo", x: 90, y: 12, width: 30, height: 22, zIndex: 2 },
+          { side: "front", type: "dynamic_field", fieldKey: "school.name", x: 20, y: 36, width: 170, height: 9, fontSize: 10, fontWeight: "bold", textAlign: "center", color: "#111827" },
+          { side: "front", type: "dynamic_field", fieldKey: "school.address", x: 20, y: 45, width: 170, height: 6, fontSize: 5, textAlign: "center", color: "#6b7280" },
+          { side: "front", type: "text", content: "BONAFIDE CERTIFICATE", x: 20, y: 62, width: 170, height: 9, fontSize: 12, fontWeight: "bold", textAlign: "center", color: "#111827" },
+          { side: "front", type: "dynamic_field", fieldKey: "certificate.number", x: 20, y: 76, width: 80, height: 5, fontSize: 5, color: "#6b7280" },
+          { side: "front", type: "dynamic_field", fieldKey: "certificate.issueDate", x: 110, y: 76, width: 80, height: 5, fontSize: 5, textAlign: "right", color: "#6b7280" },
+          { side: "front", type: "text", content: "This is to certify that", x: 20, y: 95, width: 170, height: 6, fontSize: 6, textAlign: "center", color: "#374151" },
+          { side: "front", type: "dynamic_field", fieldKey: "student.name", x: 20, y: 103, width: 170, height: 8, fontSize: 9, fontWeight: "bold", textAlign: "center", color: "#111827" },
+          { side: "front", type: "text", content: "son/daughter/ward of", x: 20, y: 113, width: 170, height: 6, fontSize: 6, textAlign: "center", color: "#374151" },
+          { side: "front", type: "dynamic_field", fieldKey: "student.guardianName", x: 20, y: 121, width: 170, height: 7, fontSize: 7, fontWeight: "bold", textAlign: "center", color: "#111827" },
+          ...labelValueRow("Admission Number:", "student.admissionNumber", 138),
+          ...labelValueRow("Class & Section:", "student.class", 146),
+          ...labelValueRow("Academic Year:", "academicYear.label", 154),
+          ...labelValueRow("Date of Birth:", "student.dateOfBirth", 162),
+          {
+            side: "front",
+            type: "text",
+            content: "is a bonafide student of this institution and is presently studying here. This certificate is issued upon request for the purpose it may be required.",
+            x: 20,
+            y: 176,
+            width: 170,
+            height: 20,
+            fontSize: 6,
+            color: "#374151",
+          },
+          { side: "front", type: "signature", x: 25, y: 245, width: 45, height: 15 },
+          { side: "front", type: "text", content: "Class Teacher", x: 25, y: 262, width: 45, height: 5, fontSize: 5, textAlign: "center", color: "#6b7280" },
+          { side: "front", type: "signature", x: 140, y: 245, width: 45, height: 15 },
+          { side: "front", type: "dynamic_field", fieldKey: "school.principalName", x: 140, y: 262, width: 45, height: 4.5, fontSize: 5, textAlign: "center", color: "#111827" },
+          { side: "front", type: "text", content: "Principal", x: 140, y: 267, width: 45, height: 5, fontSize: 4.5, textAlign: "center", color: "#6b7280" },
+          { side: "front", type: "qrcode", x: 175, y: 275, width: 22, height: 22 },
+        ].map((el, zi) => ({ ...el, zIndex: zi })),
+      },
+    },
+  });
+
+  await prisma.certificateTemplate.create({
+    data: {
+      schoolId: null,
+      isSystemTemplate: true,
+      certificateTypeId: tcType.id,
+      name: "Standard Transfer Certificate",
+      pageWidthMm: 210,
+      pageHeightMm: 297,
+      orientation: "portrait",
+      isDefault: true,
+      isActive: true,
+      elements: {
+        create: [
+          { side: "front", type: "shape", x: 0, y: 0, width: 210, height: 297, backgroundColor: "#ffffff", zIndex: 0 },
+          { side: "front", type: "logo", fieldKey: "school.logo", x: 90, y: 10, width: 30, height: 22, zIndex: 2 },
+          { side: "front", type: "dynamic_field", fieldKey: "school.name", x: 20, y: 34, width: 170, height: 9, fontSize: 10, fontWeight: "bold", textAlign: "center", color: "#111827" },
+          { side: "front", type: "dynamic_field", fieldKey: "school.affiliationBoard", x: 20, y: 43, width: 170, height: 5, fontSize: 5, textAlign: "center", color: "#6b7280" },
+          { side: "front", type: "text", content: "TRANSFER CERTIFICATE", x: 20, y: 58, width: 170, height: 9, fontSize: 12, fontWeight: "bold", textAlign: "center", color: "#111827" },
+          { side: "front", type: "dynamic_field", fieldKey: "certificate.number", x: 20, y: 72, width: 80, height: 5, fontSize: 5, color: "#6b7280" },
+          { side: "front", type: "dynamic_field", fieldKey: "certificate.issueDate", x: 110, y: 72, width: 80, height: 5, fontSize: 5, textAlign: "right", color: "#6b7280" },
+          ...labelValueRow("Student Name:", "student.name", 86),
+          ...labelValueRow("Admission Number:", "student.admissionNumber", 94),
+          ...labelValueRow("Father's/Guardian's Name:", "student.guardianName", 102),
+          ...labelValueRow("Date of Birth:", "student.dateOfBirth", 110),
+          ...labelValueRow("Date of Admission:", "student.admissionDate", 118),
+          ...labelValueRow("Class & Section:", "student.class", 126),
+          ...labelValueRow("Previous School:", "student.previousSchool", 134),
+          ...labelValueRow("Academic Year:", "academicYear.label", 142),
+          {
+            side: "front",
+            type: "text",
+            content: "The above-named student has been on the rolls of this institution and is hereby granted a transfer certificate. All dues have been cleared and conduct during the period of study was satisfactory.",
+            x: 20,
+            y: 156,
+            width: 170,
+            height: 20,
+            fontSize: 6,
+            color: "#374151",
+          },
+          { side: "front", type: "signature", x: 25, y: 245, width: 45, height: 15 },
+          { side: "front", type: "text", content: "Class Teacher", x: 25, y: 262, width: 45, height: 5, fontSize: 5, textAlign: "center", color: "#6b7280" },
+          { side: "front", type: "signature", x: 140, y: 245, width: 45, height: 15 },
+          { side: "front", type: "dynamic_field", fieldKey: "school.principalName", x: 140, y: 262, width: 45, height: 4.5, fontSize: 5, textAlign: "center", color: "#111827" },
+          { side: "front", type: "text", content: "Principal", x: 140, y: 267, width: 45, height: 5, fontSize: 4.5, textAlign: "center", color: "#6b7280" },
+          { side: "front", type: "qrcode", x: 175, y: 275, width: 22, height: 22 },
+        ].map((el, zi) => ({ ...el, zIndex: zi })),
+      },
+    },
+  });
+
+  console.log("Seeded 2 system certificate templates (Bonafide, Transfer Certificate).");
 }
 
 main()

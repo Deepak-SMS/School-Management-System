@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, Plus, School, Download } from "lucide-react";
+import { Search, Plus, School, Download, Pencil, Trash2 } from "lucide-react";
 import { classService } from "@/services/classService";
 import { campusService } from "@/services/campusService";
 import { academicYearService } from "@/services/academicYearService";
-import type { ClassListResponse } from "@/types/class";
+import type { ClassListResponse, ClassRecord } from "@/types/class";
 import type { CampusRecord } from "@/types/campus";
 import type { AcademicYearRecord } from "@/types/academicYear";
 import { toCsv, downloadCsv } from "@/lib/csv";
@@ -15,11 +15,15 @@ import { hasPermission } from "@/config/permissions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { TableSkeleton } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { toast } from "@/hooks/use-toast";
+import type { ApiError } from "@/services/studentService";
 
 const PAGE_SIZE = 20;
 
@@ -27,6 +31,8 @@ export function ClassTable() {
   const user = useCurrentUser();
   const canCreate = hasPermission(user.role, "classes", "create");
   const canExport = hasPermission(user.role, "classes", "export");
+  const canEdit = hasPermission(user.role, "classes", "edit");
+  const canDelete = hasPermission(user.role, "classes", "delete");
 
   const [result, setResult] = useState<ClassListResponse | null>(null);
   const [campuses, setCampuses] = useState<CampusRecord[]>([]);
@@ -37,24 +43,64 @@ export function ClassTable() {
   const [campusId, setCampusId] = useState("");
   const [academicYearId, setAcademicYearId] = useState("");
   const [page, setPage] = useState(1);
+  const [deleting, setDeleting] = useState<ClassRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
     campusService.list({ pageSize: 100 }).then((r) => setCampuses(r.data)).catch(() => {});
-    academicYearService.list({ pageSize: 50 }).then((r) => setAcademicYears(r.data)).catch(() => {});
+    academicYearService.list({ pageSize: 50 }).then((r) => {
+      setAcademicYears(r.data);
+      // Land on the active year by default — the academic year column is
+      // gone from the table, so the filter is the only place it's shown now.
+      const active = r.data.find((y) => y.status === "active");
+      if (active) setAcademicYearId(active.id);
+    }).catch(() => {});
   }, []);
 
+  function load() {
+    setLoading(true);
+    setError(null);
+    classService
+      .list({ q: search || undefined, campusId: campusId || undefined, academicYearId: academicYearId || undefined, page, pageSize: PAGE_SIZE })
+      .then(setResult)
+      .catch(() => setError("Couldn't load classes."))
+      .finally(() => setLoading(false));
+  }
+
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setLoading(true);
-      setError(null);
-      classService
-        .list({ q: search || undefined, campusId: campusId || undefined, academicYearId: academicYearId || undefined, page, pageSize: PAGE_SIZE })
-        .then(setResult)
-        .catch(() => setError("Couldn't load classes."))
-        .finally(() => setLoading(false));
-    }, 250);
+    const timeout = setTimeout(load, 250);
     return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, campusId, academicYearId, page]);
+
+  async function toggleStatus(cls: ClassRecord, checked: boolean) {
+    setTogglingId(cls.id);
+    try {
+      await classService.update(cls.id, { status: checked ? "active" : "inactive" });
+      toast({ title: `${cls.name} marked ${checked ? "active" : "inactive"}`, variant: "success" });
+      load();
+    } catch (e) {
+      toast({ title: (e as ApiError)?.error ?? "Couldn't update status.", variant: "danger" });
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setIsDeleting(true);
+    try {
+      await classService.remove(deleting.id);
+      toast({ title: "Class deleted", variant: "success" });
+      setDeleting(null);
+      load();
+    } catch (e) {
+      toast({ title: (e as ApiError)?.error ?? "Couldn't delete the class.", variant: "danger" });
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   const totalPages = result ? Math.max(1, Math.ceil(result.total / PAGE_SIZE)) : 1;
 
@@ -62,10 +108,10 @@ export function ClassTable() {
     if (!result) return;
     const csv = toCsv(result.data, [
       { header: "Class Name", value: (c) => c.name },
-      { header: "Class Code", value: (c) => c.code },
+      { header: "Class ID", value: (c) => c.code },
       { header: "Academic Year", value: (c) => c.academicYear.label },
       { header: "Campus", value: (c) => c.campus.name },
-      { header: "Class Teacher", value: (c) => c.classTeacher?.fullName },
+      { header: "Class Representative", value: (c) => c.classTeacher?.fullName },
       { header: "Sections", value: (c) => c.counts?.sections ?? 0 },
       { header: "Students", value: (c) => c.counts?.students ?? 0 },
       { header: "Capacity", value: (c) => c.capacity },
@@ -122,6 +168,7 @@ export function ClassTable() {
             {academicYears.map((y) => (
               <SelectItem key={y.id} value={y.id}>
                 {y.label}
+                {y.status === "active" ? " (Active)" : ""}
               </SelectItem>
             ))}
           </SelectContent>
@@ -166,9 +213,9 @@ export function ClassTable() {
             <TableHeader>
               <TableRow>
                 <TableHead>Class</TableHead>
-                <TableHead>Academic Year</TableHead>
+                <TableHead>Class ID</TableHead>
                 <TableHead>Campus</TableHead>
-                <TableHead>Class Teacher</TableHead>
+                <TableHead>Class Representative</TableHead>
                 <TableHead>Sections</TableHead>
                 <TableHead>Students</TableHead>
                 <TableHead>Status</TableHead>
@@ -181,7 +228,7 @@ export function ClassTable() {
                 return (
                   <TableRow key={cls.id}>
                     <TableCell className="font-medium">{cls.name}</TableCell>
-                    <TableCell>{cls.academicYear.label}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{cls.code}</TableCell>
                     <TableCell>{cls.campus.name}</TableCell>
                     <TableCell>{cls.classTeacher?.fullName ?? "—"}</TableCell>
                     <TableCell>{cls.counts?.sections ?? 0}</TableCell>
@@ -195,12 +242,39 @@ export function ClassTable() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={cls.status === "active" ? "success" : "neutral"}>{cls.status}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={cls.status === "active"}
+                          onCheckedChange={(checked) => toggleStatus(cls, checked)}
+                          disabled={!canEdit || togglingId === cls.id}
+                          aria-label={`Mark ${cls.name} ${cls.status === "active" ? "inactive" : "active"}`}
+                        />
+                        <Badge variant={cls.status === "active" ? "success" : "neutral"}>{cls.status}</Badge>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href={`/school/classes/${cls.id}`}>View</Link>
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href={`/school/classes/${cls.id}`}>View</Link>
+                        </Button>
+                        {canEdit && (
+                          <Button asChild variant="ghost" size="sm">
+                            <Link href={`/school/classes/${cls.id}/edit`}>
+                              <Pencil className="size-4" /> Edit
+                            </Link>
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-danger-600 hover:bg-danger-50 hover:text-danger-600"
+                            onClick={() => setDeleting(cls)}
+                          >
+                            <Trash2 className="size-4" /> Delete
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -226,6 +300,17 @@ export function ClassTable() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        title={`Delete ${deleting?.name ?? "class"}?`}
+        description="This can't be undone. Classes with sections or students assigned to them can't be deleted — deactivate them instead."
+        confirmLabel="Delete"
+        variant="destructive"
+        isLoading={isDeleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/authorize";
-import { studentInputSchema, cleanEmptyStrings, DEFAULT_STUDENT_STATUS } from "@/lib/validation/student";
-import { buildStudentGuardianCreates } from "@/lib/students/guardian-input";
-import { createQrVerification } from "@/lib/qr-verification";
-import { recordAudit } from "@/lib/audit";
+import { studentInputSchema } from "@/lib/validation/student";
+import { validateStudentPlacement, createStudentWithGuardians } from "@/lib/students/create-student";
+import { assertAdmissionNumberAvailable } from "@/lib/students/admission-number";
 import { apiError } from "@/lib/api-error";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -30,17 +29,22 @@ export async function GET(request: NextRequest) {
           { lastName: { contains: q } },
           { admissionNumber: { contains: q } },
           { enrollmentNumber: { contains: q } },
+          { rollNumber: { contains: q } },
         ],
       }),
     };
 
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       prisma.student.findMany({
         where,
         include: {
-          class: { select: { id: true, name: true } },
-          section: { select: { id: true, name: true } },
+          class: { select: { id: true, name: true, classTeacher: { select: { id: true, fullName: true } } } },
+          section: { select: { id: true, name: true, classTeacher: { select: { id: true, fullName: true } } } },
           academicYear: { select: { id: true, label: true } },
+          guardians: {
+            orderBy: { sortOrder: "asc" },
+            select: { isPrimary: true, guardian: { select: { mobile: true } } },
+          },
         },
         orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
         skip: (page - 1) * pageSize,
@@ -48,6 +52,16 @@ export async function GET(request: NextRequest) {
       }),
       prisma.student.count({ where }),
     ]);
+
+    // The section's own class teacher takes priority — that's the specific
+    // 5-A/5-B teacher — falling back to the class-wide one if the section
+    // hasn't been assigned its own. Guardian mobile: whichever one is flagged
+    // primary, else just the first on file.
+    const data = rows.map(({ guardians, ...student }) => ({
+      ...student,
+      classTeacher: student.section?.classTeacher ?? student.class.classTeacher ?? null,
+      parentMobile: (guardians.find((g) => g.isPrimary) ?? guardians[0])?.guardian.mobile ?? null,
+    }));
 
     return NextResponse.json({ data, total, page, pageSize });
   } catch (error) {
@@ -59,52 +73,15 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requirePermission("students", "create");
     const { schoolId } = user;
-    const { guardians, ...input } = cleanEmptyStrings(studentInputSchema.parse(await request.json()));
+    const input = studentInputSchema.parse(await request.json());
 
     // Class, section and year must belong to this school, and the section must
     // belong to the chosen class — otherwise a guessed id could enrol a student
     // into another tenant's class.
-    const [academicYear, cls] = await Promise.all([
-      prisma.academicYear.findFirst({ where: { id: input.academicYearId, schoolId }, select: { id: true } }),
-      prisma.class.findFirst({ where: { id: input.classId, schoolId }, select: { id: true } }),
-    ]);
-    if (!academicYear) return NextResponse.json({ error: "Academic year not found." }, { status: 404 });
-    if (!cls) return NextResponse.json({ error: "Class not found." }, { status: 404 });
+    await validateStudentPlacement(schoolId, input);
+    await assertAdmissionNumberAvailable(schoolId, input.admissionNumber);
 
-    if (input.sectionId) {
-      const section = await prisma.section.findFirst({
-        where: { id: input.sectionId, schoolId, classId: input.classId },
-        select: { id: true },
-      });
-      if (!section) {
-        return NextResponse.json({ error: "That section doesn't belong to the selected class." }, { status: 422 });
-      }
-    }
-
-    const student = await prisma.$transaction(async (tx) => {
-      const created = await tx.student.create({
-        data: {
-          schoolId,
-          ...input,
-          status: input.status ?? DEFAULT_STUDENT_STATUS,
-          dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : undefined,
-          admissionDate: input.admissionDate ? new Date(input.admissionDate) : undefined,
-          guardians: { create: buildStudentGuardianCreates(schoolId, guardians) },
-        },
-      });
-
-      await createQrVerification(tx, { schoolId, studentId: created.id });
-      await recordAudit(tx, {
-        schoolId,
-        userId: user.id,
-        action: "student.create",
-        entityType: "Student",
-        entityId: created.id,
-        after: { admissionNumber: created.admissionNumber, name: `${created.firstName} ${created.lastName}` },
-      });
-
-      return created;
-    });
+    const student = await prisma.$transaction((tx) => createStudentWithGuardians(tx, schoolId, user.id, input));
 
     return NextResponse.json(student, { status: 201 });
   } catch (error) {

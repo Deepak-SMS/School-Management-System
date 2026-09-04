@@ -18,5 +18,8 @@ export async function GET() {
     }),
   ]);
 
-  return NextResponse.json({ classes, academicYears });
+  return NextResponse.json({
+    classes,
+    academicYears: academicYears.map((year) => ({ ...year, isCurrent: year.status === "active" })),
+  });
 }

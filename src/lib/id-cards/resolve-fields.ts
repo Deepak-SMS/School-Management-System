@@ -45,6 +45,54 @@ export function resolveStudentFields(
   };
 }
 
+/** Field codes offered in the designer's "Bind to data" picker, grouped for display — mirrors CERTIFICATE_FIELD_GROUPS. Keys match resolveStudentFields/resolveStaffFields and SAMPLE_CARD_DATA exactly. */
+export const ID_CARD_FIELD_GROUPS: { label: string; fields: { key: string; label: string }[] }[] = [
+  {
+    label: "School",
+    fields: [
+      { key: "school.name", label: "School name" },
+      { key: "school.address", label: "School address" },
+      { key: "school.phone", label: "School phone" },
+      { key: "school.email", label: "School email" },
+      { key: "school.website", label: "School website" },
+      { key: "school.principalName", label: "Principal name" },
+    ],
+  },
+  {
+    label: "Student",
+    fields: [
+      { key: "student.name", label: "Student name" },
+      { key: "student.admissionNumber", label: "Admission number" },
+      { key: "student.class", label: "Class" },
+      { key: "student.section", label: "Section" },
+      { key: "student.rollNumber", label: "Roll number" },
+      { key: "student.dateOfBirth", label: "Date of birth" },
+      { key: "student.bloodGroup", label: "Blood group" },
+      { key: "student.house", label: "House" },
+      { key: "student.guardianName", label: "Guardian name" },
+      { key: "student.guardianPhone", label: "Guardian phone" },
+      { key: "student.emergencyContact", label: "Emergency contact" },
+      { key: "student.address", label: "Address" },
+      { key: "student.busNumber", label: "Bus number" },
+    ],
+  },
+  {
+    label: "Staff",
+    fields: [
+      { key: "staff.name", label: "Employee name" },
+      { key: "staff.employeeId", label: "Employee ID" },
+      { key: "staff.designation", label: "Designation" },
+      { key: "staff.department", label: "Department" },
+      { key: "staff.bloodGroup", label: "Blood group" },
+      { key: "staff.mobileNumber", label: "Mobile number" },
+    ],
+  },
+  {
+    label: "Academic",
+    fields: [{ key: "academicYear.label", label: "Academic year" }],
+  },
+];
+
 export function resolveStaffFields(
   staff: Staff & { department: { name: string } | null; designation: { name: string } | null },
   school: School,

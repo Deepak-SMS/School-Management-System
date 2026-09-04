@@ -18,6 +18,7 @@ export type UploadKind =
   | "staff_document"
   | "student_document"
   | "school_document"
+  | "expense_document"
   | "candidate_photo"
   | "candidate_resume"
   | "candidate_document"
@@ -26,7 +27,11 @@ export type UploadKind =
   | "signature"
   | "generated_pdf"
   | "import_excel"
-  | "import_zip";
+  | "import_zip"
+  | "news_image"
+  | "news_attachment"
+  | "library_book_cover"
+  | "certificate_background";
 
 export const UPLOAD_KINDS: readonly UploadKind[] = [
   "student_photo",
@@ -34,6 +39,7 @@ export const UPLOAD_KINDS: readonly UploadKind[] = [
   "staff_document",
   "student_document",
   "school_document",
+  "expense_document",
   "candidate_photo",
   "candidate_resume",
   "candidate_document",
@@ -43,6 +49,10 @@ export const UPLOAD_KINDS: readonly UploadKind[] = [
   "generated_pdf",
   "import_excel",
   "import_zip",
+  "news_image",
+  "news_attachment",
+  "library_book_cover",
+  "certificate_background",
 ];
 
 /** Accepted MIME types per kind — an allowlist, so an upload route can never store arbitrary executables. */
@@ -52,6 +62,7 @@ export const ALLOWED_MIME_TYPES: Record<UploadKind, readonly string[]> = {
   staff_document: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
   student_document: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
   school_document: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+  expense_document: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
   candidate_photo: ["image/jpeg", "image/png", "image/webp"],
   candidate_resume: [
     "application/pdf",
@@ -65,6 +76,22 @@ export const ALLOWED_MIME_TYPES: Record<UploadKind, readonly string[]> = {
   generated_pdf: ["application/pdf"],
   import_excel: ["text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
   import_zip: ["application/zip", "application/x-zip-compressed"],
+  news_image: ["image/jpeg", "image/png", "image/webp"],
+  news_attachment: [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "image/jpeg",
+    "image/png",
+    "application/zip",
+    "application/x-zip-compressed",
+  ],
+  library_book_cover: ["image/jpeg", "image/png", "image/webp"],
+  certificate_background: ["image/jpeg", "image/png", "image/webp", "image/svg+xml"],
 };
 
 /** Per-kind size ceiling in bytes. Documents get more room than avatars. */
@@ -74,6 +101,7 @@ export const MAX_UPLOAD_BYTES: Record<UploadKind, number> = {
   staff_document: 15 * 1024 * 1024,
   student_document: 15 * 1024 * 1024,
   school_document: 20 * 1024 * 1024,
+  expense_document: 15 * 1024 * 1024,
   candidate_photo: 5 * 1024 * 1024,
   candidate_resume: 15 * 1024 * 1024,
   candidate_document: 15 * 1024 * 1024,
@@ -83,6 +111,10 @@ export const MAX_UPLOAD_BYTES: Record<UploadKind, number> = {
   generated_pdf: 50 * 1024 * 1024,
   import_excel: 25 * 1024 * 1024,
   import_zip: 100 * 1024 * 1024,
+  news_image: 5 * 1024 * 1024,
+  news_attachment: 20 * 1024 * 1024,
+  library_book_cover: 5 * 1024 * 1024,
+  certificate_background: 10 * 1024 * 1024,
 };
 
 export async function saveFile(params: {

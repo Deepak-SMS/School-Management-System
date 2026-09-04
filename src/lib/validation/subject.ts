@@ -43,3 +43,13 @@ export const subjectAssignmentInputSchema = z.object({
 });
 
 export type SubjectAssignmentInput = z.infer<typeof subjectAssignmentInputSchema>;
+
+export const subjectBulkAssignmentInputSchema = z.object({
+  academicYearId: z.string().min(1, "Academic year is required"),
+  classId: z.string().min(1, "Class is required"),
+  scope: z.enum(["all", "sections"]),
+  sectionIds: z.array(z.string()).optional(),
+  teacherId: z.string().trim().optional(),
+});
+
+export type SubjectBulkAssignmentInput = z.infer<typeof subjectBulkAssignmentInputSchema>;

@@ -51,6 +51,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const input = cleanEmptyStrings(classInputSchema.parse(body));
 
+    const duplicate = await prisma.class.findFirst({
+      where: { schoolId, academicYearId: input.academicYearId, OR: [{ name: input.name }, { code: input.code }] },
+      include: { academicYear: { select: { label: true } } },
+    });
+    if (duplicate) {
+      return NextResponse.json(
+        {
+          error: `A class named "${duplicate.name}" (${duplicate.code}) already exists for ${duplicate.academicYear.label}. Choose a different name/code, or open the existing class instead.`,
+        },
+        { status: 409 },
+      );
+    }
+
     const cls = await prisma.$transaction(async (tx) => {
       const created = await tx.class.create({
         data: {

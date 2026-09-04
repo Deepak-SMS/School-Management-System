@@ -20,8 +20,14 @@ import { FormField } from "@/components/ui/form-field";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
+import { Modal, ModalContent, ModalFooter } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/loading-state";
 import type { ApiError } from "@/services/studentService";
+
+/** The Class/Section create routes return this exact phrasing for a name/code clash — see src/app/api/classes/route.ts and src/app/api/sections/route.ts. */
+function isDuplicateError(error: ApiError): boolean {
+  return typeof error?.error === "string" && error.error.includes("already exists for");
+}
 
 interface ClassFormProps {
   defaultValues?: Partial<ClassInput>;
@@ -30,15 +36,18 @@ interface ClassFormProps {
 }
 
 export function ClassForm({ defaultValues, onSubmit, submitLabel = "Add class" }: ClassFormProps) {
+  const isCreate = !defaultValues;
   const [campuses, setCampuses] = useState<CampusRecord[] | null>(null);
   const [academicYears, setAcademicYears] = useState<AcademicYearRecord[]>([]);
   const [staff, setStaff] = useState<StaffRecord[]>([]);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [duplicateMessage, setDuplicateMessage] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     control,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ClassFormValues, unknown, ClassInput>({
     resolver: zodResolver(classInputSchema),
@@ -47,17 +56,33 @@ export function ClassForm({ defaultValues, onSubmit, submitLabel = "Add class" }
 
   useEffect(() => {
     campusService.list({ pageSize: 100 }).then((r) => setCampuses(r.data)).catch(() => setCampuses([]));
-    academicYearService.list({ pageSize: 50 }).then((r) => setAcademicYears(r.data)).catch(() => {});
+    academicYearService.list({ pageSize: 50 }).then((r) => {
+      setAcademicYears(r.data);
+      // Rule: new records default into the active academic year, so data
+      // never lands in a draft/archived year by accident. Only applies when
+      // creating — an existing class keeps whatever year it was assigned.
+      if (isCreate) {
+        const active = r.data.find((y) => y.status === "active");
+        if (active) setValue("academicYearId", active.id, { shouldValidate: true });
+      }
+    }).catch(() => {});
     staffService.list({ pageSize: 200 }).then((r) => setStaff(r.data)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleFormSubmit(values: ClassInput) {
     setServerError(null);
+    setDuplicateMessage(null);
     try {
       await onSubmit(values);
     } catch (error) {
       const apiError = error as ApiError;
-      setServerError(apiError?.error ?? "Something went wrong. Please try again.");
+      const message = apiError?.error ?? "Something went wrong. Please try again.";
+      if (isDuplicateError(apiError)) {
+        setDuplicateMessage(message);
+      } else {
+        setServerError(message);
+      }
     }
   }
 
@@ -78,11 +103,11 @@ export function ClassForm({ defaultValues, onSubmit, submitLabel = "Add class" }
           <CardTitle>Class details</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Class name" required error={errors.name?.message}>
+          <FormField label="Class name" required description='Must be in the form "Class 10"' error={errors.name?.message}>
             {(field) => <Input {...field} {...register("name")} placeholder="Class 10" />}
           </FormField>
-          <FormField label="Class code" required error={errors.code?.message}>
-            {(field) => <Input {...field} {...register("code")} placeholder="CLASS-10" />}
+          <FormField label="Class ID" required description='Must be in the form "CLS01"' error={errors.code?.message}>
+            {(field) => <Input {...field} {...register("code")} placeholder="CLS01" />}
           </FormField>
           <FormField label="Academic year" required error={errors.academicYearId?.message}>
             {(field) => (
@@ -134,7 +159,7 @@ export function ClassForm({ defaultValues, onSubmit, submitLabel = "Add class" }
           <FormField label="Capacity" error={errors.capacity?.message}>
             {(field) => <Input {...field} {...register("capacity")} type="number" min={1} />}
           </FormField>
-          <FormField label="Class teacher" error={errors.classTeacherId?.message}>
+          <FormField label="Class representative" required error={errors.classTeacherId?.message}>
             {(field) => (
               <Controller
                 name="classTeacherId"
@@ -205,6 +230,14 @@ export function ClassForm({ defaultValues, onSubmit, submitLabel = "Add class" }
           {submitLabel}
         </Button>
       </div>
+
+      <Modal open={Boolean(duplicateMessage)} onOpenChange={(open) => !open && setDuplicateMessage(null)}>
+        <ModalContent title="Class already exists" description={duplicateMessage ?? undefined} size="sm">
+          <ModalFooter className="-mx-5 -mb-4 mt-2">
+            <Button onClick={() => setDuplicateMessage(null)}>Got it</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </form>
   );
 }

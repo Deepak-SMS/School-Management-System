@@ -16,6 +16,12 @@ export interface SchoolProfileRecord {
   principalName?: string | null;
   logoUrl?: string | null;
   bannerUrl?: string | null;
+  udisePlusCode?: string | null;
+  udiseSchoolId?: string | null;
+  boardAffiliationNumber?: string | null;
+  recognitionNumber?: string | null;
+  rteRegistrationNumber?: string | null;
+  nocNumber?: string | null;
   registrationNumber?: string | null;
   schoolType?: string | null;
   institutionType?: string | null;

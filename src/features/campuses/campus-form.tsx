@@ -8,8 +8,7 @@ import { campusInputSchema, type CampusInput } from "@/lib/validation/campus";
 
 type CampusFormValues = z.input<typeof campusInputSchema>;
 import { CAMPUS_TYPES, CAMPUS_TYPE_LABELS } from "@/lib/constants/school";
-import { staffService } from "@/services/staffService";
-import type { StaffRecord } from "@/types/staff";
+import { schoolProfileService } from "@/services/schoolProfileService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/components/ui/form-field";
@@ -25,7 +24,7 @@ interface CampusFormProps {
 }
 
 export function CampusForm({ defaultValues, onSubmit, submitLabel = "Add campus" }: CampusFormProps) {
-  const [staff, setStaff] = useState<StaffRecord[]>([]);
+  const [administratorName, setAdministratorName] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -39,7 +38,7 @@ export function CampusForm({ defaultValues, onSubmit, submitLabel = "Add campus"
   });
 
   useEffect(() => {
-    staffService.list({ pageSize: 200 }).then((res) => setStaff(res.data)).catch(() => {});
+    schoolProfileService.get().then((profile) => setAdministratorName(profile.administratorName ?? null)).catch(() => {});
   }, []);
 
   async function handleFormSubmit(values: CampusInput) {
@@ -89,27 +88,8 @@ export function CampusForm({ defaultValues, onSubmit, submitLabel = "Add campus"
               />
             )}
           </FormField>
-          <FormField label="Campus head" error={errors.headStaffId?.message}>
-            {(field) => (
-              <Controller
-                name="headStaffId"
-                control={control}
-                render={({ field: selectField }) => (
-                  <Select value={selectField.value} onValueChange={selectField.onChange}>
-                    <SelectTrigger id={field.id}>
-                      <SelectValue placeholder="Select staff member" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {staff.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.fullName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            )}
+          <FormField label="Campus head" description="Always the school's administrator">
+            {(field) => <Input {...field} value={administratorName ?? "Not set — add one in School Profile"} disabled />}
           </FormField>
           <FormField label="Status" error={errors.status?.message}>
             {(field) => (
@@ -169,20 +149,6 @@ export function CampusForm({ defaultValues, onSubmit, submitLabel = "Add campus"
           </FormField>
           <FormField label="Website" error={errors.website?.message}>
             {(field) => <Input {...field} {...register("website")} />}
-          </FormField>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Capacity</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Student capacity" error={errors.studentCapacity?.message}>
-            {(field) => <Input {...field} {...register("studentCapacity")} type="number" min={1} />}
-          </FormField>
-          <FormField label="Staff capacity" error={errors.staffCapacity?.message}>
-            {(field) => <Input {...field} {...register("staffCapacity")} type="number" min={1} />}
           </FormField>
         </CardContent>
       </Card>

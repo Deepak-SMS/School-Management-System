@@ -23,6 +23,13 @@ const schoolInfoSchema = z.object({
   logoUrl: z.string().trim().max(500).optional(),
   bannerUrl: z.string().trim().max(500).optional(),
   // School Profile module — additive fields, see prisma/schema.prisma School model.
+  // Government & Board IDs — Indian school compliance identifiers.
+  udisePlusCode: z.string().trim().max(50).optional(),
+  udiseSchoolId: z.string().trim().max(50).optional(),
+  boardAffiliationNumber: z.string().trim().max(100).optional(),
+  recognitionNumber: z.string().trim().max(100).optional(),
+  rteRegistrationNumber: z.string().trim().max(100).optional(),
+  nocNumber: z.string().trim().max(100).optional(),
   registrationNumber: z.string().trim().max(100).optional(),
   schoolType: z.enum(SCHOOL_TYPES).optional(),
   institutionType: z.enum(INSTITUTION_TYPES).optional(),

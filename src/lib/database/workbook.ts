@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import ExcelJS from "exceljs";
 import type { Dataset, DatasetColumn, DatasetRow } from "@/lib/database/datasets";
 
@@ -146,10 +147,14 @@ function cellText(value: ExcelJS.CellValue): string {
   return String(value).trim();
 }
 
-/** Reads an uploaded workbook into plain header-keyed rows. */
+/** Reads an uploaded workbook into plain header-keyed rows. Every importer here advertises .xlsx/.xls/.csv — a plain CSV isn't a valid xlsx zip, so a failed xlsx parse is retried as CSV rather than surfaced as an error. */
 export async function readWorkbook(data: Buffer): Promise<ReadSheet[]> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(data as unknown as ArrayBuffer);
+  try {
+    await workbook.xlsx.load(data as unknown as ArrayBuffer);
+  } catch {
+    await workbook.csv.read(Readable.from(data));
+  }
 
   const sheets: ReadSheet[] = [];
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, CalendarClock } from "lucide-react";
+import { AssignmentScheduleModal } from "@/features/subjects/assignment-schedule-modal";
 import { subjectService } from "@/services/subjectService";
 import { academicYearService } from "@/services/academicYearService";
 import { classService } from "@/services/classService";
@@ -32,6 +33,8 @@ export function SubjectAssignmentPanel({ subjectId, assignments, onChange }: {
   const [sections, setSections] = useState<SectionRecord[]>([]);
   const [staff, setStaff] = useState<StaffRecord[]>([]);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [changingTeacherId, setChangingTeacherId] = useState<string | null>(null);
+  const [schedulingAssignment, setSchedulingAssignment] = useState<SubjectAssignmentRecord | null>(null);
 
   const [academicYearId, setAcademicYearId] = useState<string>("");
   const [classId, setClassId] = useState<string>("");
@@ -44,7 +47,13 @@ export function SubjectAssignmentPanel({ subjectId, assignments, onChange }: {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    academicYearService.list({ pageSize: 50 }).then((r) => setAcademicYears(r.data));
+    academicYearService.list({ pageSize: 50 }).then((r) => {
+      setAcademicYears(r.data);
+      // Default to the active academic year so a new assignment never lands
+      // in a draft/archived year by accident — same rule class-form.tsx follows.
+      const current = r.data.find((y) => y.status === "active") ?? r.data[0];
+      if (current) setAcademicYearId(current.id);
+    });
     classService.list({ pageSize: 100, status: "active" }).then((r) => setClasses(r.data));
     staffService.list({ pageSize: 200, category: "teacher" }).then((r) => setStaff(r.data));
   }, []);
@@ -129,6 +138,23 @@ export function SubjectAssignmentPanel({ subjectId, assignments, onChange }: {
       toast({ title: apiError?.error ?? "Couldn't assign subject", variant: "danger" });
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleTeacherChange(assignment: SubjectAssignmentRecord, value: string) {
+    setChangingTeacherId(assignment.id);
+    try {
+      await subjectService.updateAssignmentTeacher(subjectId, assignment.id, value === "unassigned" ? null : value);
+      toast({
+        title: value === "unassigned" ? "Teacher removed" : "Teacher updated",
+        variant: "success",
+      });
+      onChange();
+    } catch (error) {
+      const apiError = error as ApiError;
+      toast({ title: apiError?.error ?? "Couldn't update the teacher", variant: "danger" });
+    } finally {
+      setChangingTeacherId(null);
     }
   }
 
@@ -263,6 +289,7 @@ export function SubjectAssignmentPanel({ subjectId, assignments, onChange }: {
               <TableHead>Class</TableHead>
               <TableHead>Section</TableHead>
               <TableHead>Teacher</TableHead>
+              <TableHead>Periods/wk</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -272,8 +299,30 @@ export function SubjectAssignmentPanel({ subjectId, assignments, onChange }: {
                 <TableCell>{a.academicYear.label}</TableCell>
                 <TableCell>{a.class.name}</TableCell>
                 <TableCell>{a.section?.name ?? "All sections"}</TableCell>
-                <TableCell>{a.teacher?.fullName ?? "—"}</TableCell>
+                <TableCell>
+                  <Select
+                    value={a.teacher?.id ?? "unassigned"}
+                    onValueChange={(value) => handleTeacherChange(a, value)}
+                    disabled={changingTeacherId === a.id}
+                  >
+                    <SelectTrigger className="h-8 w-40">
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {staff.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.fullName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell>{a.periodsPerWeek > 0 ? a.periodsPerWeek : "—"}</TableCell>
                 <TableCell className="text-right">
+                  <Button variant="ghost" size="sm" onClick={() => setSchedulingAssignment(a)}>
+                    <CalendarClock className="size-4" />
+                  </Button>
                   <Button variant="ghost" size="sm" isLoading={removingId === a.id} onClick={() => handleRemove(a.id)}>
                     <Trash2 className="size-4" />
                   </Button>
@@ -282,6 +331,15 @@ export function SubjectAssignmentPanel({ subjectId, assignments, onChange }: {
             ))}
           </TableBody>
         </Table>
+      )}
+
+      {schedulingAssignment && (
+        <AssignmentScheduleModal
+          subjectId={subjectId}
+          assignment={schedulingAssignment}
+          onClose={() => setSchedulingAssignment(null)}
+          onSaved={onChange}
+        />
       )}
     </div>
   );

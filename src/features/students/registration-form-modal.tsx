@@ -236,7 +236,7 @@ export function RegistrationFormModal({ open, onClose }: { open: boolean; onClos
 
           {forms && forms.some((f) => f.counts.pending > 0) && (
             <Alert variant="info">
-              Submissions are waiting for review. Open <strong>Students → Admission submissions</strong> to approve them
+              Submissions are waiting for review. Open <strong>Admissions → Applications</strong> to approve them
               into student records.
             </Alert>
           )}

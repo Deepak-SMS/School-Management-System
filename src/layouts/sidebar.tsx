@@ -200,7 +200,7 @@ export function Sidebar() {
           isCollapsed && "justify-center px-0",
         )}
       >
-        <Link href="/" className="flex items-center gap-2 overflow-hidden">
+        <Link href="/admin" className="flex items-center gap-2 overflow-hidden">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary-600 text-sm font-bold text-white">
             {APP_LOGO_MARK}
           </span>

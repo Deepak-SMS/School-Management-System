@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/authorize";
-import { extractRows, validateRow, IMPORT_COLUMNS, type RowError, type ValidationContext } from "@/lib/students/student-import";
+import {
+  extractRows,
+  extractRowsFromWorkbook,
+  validateRow,
+  IMPORT_COLUMNS,
+  type ParseResult,
+  type RowError,
+  type ValidationContext,
+} from "@/lib/students/student-import";
 import { apiError } from "@/lib/api-error";
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -28,8 +36,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File is too large. Maximum size is 5 MB." }, { status: 422 });
     }
 
-    const text = await file.text();
-    const parsed = extractRows(text);
+    const isExcel =
+      file.name.toLowerCase().endsWith(".xlsx") ||
+      file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    let parsed: ParseResult;
+    if (isExcel) {
+      try {
+        parsed = await extractRowsFromWorkbook(Buffer.from(await file.arrayBuffer()));
+      } catch {
+        return NextResponse.json(
+          { error: "That file couldn't be read as an Excel workbook. Save it as .xlsx and try again." },
+          { status: 422 },
+        );
+      }
+    } else {
+      parsed = extractRows(await file.text());
+    }
 
     if (parsed.missingHeaders.length > 0) {
       return NextResponse.json(

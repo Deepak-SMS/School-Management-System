@@ -36,10 +36,19 @@ export async function GET(request: NextRequest) {
 
   const data = await Promise.all(
     subjects.map(async (subject) => {
-      const assignments = await prisma.subjectAssignment.findMany({ where: { subjectId: subject.id }, select: { classId: true, teacherId: true } });
+      const [assignments, timetableSlots, attendanceRecords, libraryBooks] = await Promise.all([
+        prisma.subjectAssignment.findMany({ where: { subjectId: subject.id }, select: { classId: true, teacherId: true } }),
+        prisma.timetableSlot.count({ where: { subjectId: subject.id } }),
+        prisma.attendance.count({ where: { subjectId: subject.id } }),
+        prisma.libraryBook.count({ where: { subjectId: subject.id } }),
+      ]);
       const classes = new Set(assignments.map((a) => a.classId)).size;
       const teachers = new Set(assignments.map((a) => a.teacherId).filter((id): id is string => Boolean(id))).size;
-      return { ...subject, counts: { classes, teachers } };
+      // Mirrors the DELETE route's own in-use check — lets the table offer
+      // "Deactivate" up front instead of trying a delete that's going to be
+      // refused (see src/app/api/subjects/[id]/route.ts).
+      const deletable = assignments.length === 0 && timetableSlots === 0 && attendanceRecords === 0 && libraryBooks === 0;
+      return { ...subject, counts: { classes, teachers }, deletable };
     }),
   );
 

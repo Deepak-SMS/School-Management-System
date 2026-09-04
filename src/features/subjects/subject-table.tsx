@@ -60,11 +60,14 @@ export function SubjectTable() {
   }, [search, subjectType, page, reloadKey]);
 
   /**
-   * A subject assigned to classes can't be deleted — the API refuses it, since
-   * removing it would orphan those assignments. Deactivating is the honest
-   * alternative, so that's what the dialog offers in that case.
+   * A subject still in use — assigned to a class, scheduled in a timetable,
+   * referenced by attendance records, or linked to library books — can't be
+   * deleted; the API refuses it, since removing it would orphan those rows.
+   * Deactivating is the honest alternative, so that's what the dialog offers
+   * in that case. `deletable` defaults true only when the list response
+   * hasn't told us otherwise, so a stale/missing field never blocks unnecessarily.
    */
-  const deletingIsAssigned = (deleting?.counts?.classes ?? 0) > 0;
+  const deletingIsAssigned = deleting ? deleting.deletable === false : false;
 
   async function handleDeleteOrDeactivate() {
     if (!deleting) return;
@@ -292,8 +295,8 @@ export function SubjectTable() {
         }
         description={
           deletingIsAssigned
-            ? `This subject is assigned to ${deleting?.counts?.classes} class(es), so it can't be deleted — that would orphan those assignments. It will be deactivated instead: hidden from pickers, but kept on record. Remove it from those classes first if you want to delete it.`
-            : "This subject isn't assigned to any class and will be deleted permanently."
+            ? `This subject is still in use — assigned to a class, scheduled in a timetable, or referenced by attendance or library records — so it can't be deleted without orphaning that data. It will be deactivated instead: hidden from pickers, but kept on record.`
+            : "This subject isn't in use anywhere and will be deleted permanently."
         }
         confirmLabel={deletingIsAssigned ? "Deactivate" : "Delete subject"}
         variant="destructive"

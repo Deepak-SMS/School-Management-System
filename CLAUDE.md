@@ -46,6 +46,20 @@ npm run lint     # eslint
 - Don't hardcode business logic in components — read/write through a `*Service` so the mock-data-to-API swap stays a one-file change.
 - Nav items, role gating, and tenant context all flow through `config/navigation.ts` and the providers — don't duplicate role-check logic inline in a page.
 
+## Code philosophy
+
+Before writing new code, work down this ladder and stop at the first rung that solves the problem — but only after actually reading the surrounding code, not guessing at it:
+
+1. **Does this need to exist at all?** If not, skip it (YAGNI).
+2. **Already in this codebase?** Reuse it — check `src/lib/`, `src/services/`, `src/components/ui/` before writing something new.
+3. **Does the stdlib/framework do it?** Use the built-in.
+4. **Does the platform do it natively?** (e.g. `<input type="date">` over a date-picker library.)
+5. **Already an installed dependency?** Use it before adding a new one.
+6. **Is it one line?** Write one line.
+7. **Only then**, implement the minimum that satisfies the task.
+
+Code should end up small because it was unnecessary to write more — not because it was golfed or compressed. This ladder never overrides validation, error handling, security, tenant/permission scoping, or accessibility: those stay mandatory at every rung, per the conventions above.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know

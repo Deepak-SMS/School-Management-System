@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, Plus, Users } from "lucide-react";
+import { Search, Plus, Users, Pencil, Trash2 } from "lucide-react";
 import { studentService } from "@/services/studentService";
 import { schoolStructureService } from "@/services/schoolStructureService";
 import type { SchoolStructure } from "@/types/student";
-import type { StudentListResponse } from "@/types/student";
+import type { StudentListResponse, StudentRecord } from "@/types/student";
 import { STUDENT_STATUSES } from "@/lib/constants/people";
+import { useCurrentUser } from "@/providers/user-provider";
+import { hasPermission } from "@/config/permissions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +19,10 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { TableSkeleton } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { toast } from "@/hooks/use-toast";
 import { StudentToolbar } from "@/features/students/student-toolbar";
+import type { ApiError } from "@/services/studentService";
 
 const statusVariant: Record<string, "success" | "neutral" | "warning" | "danger"> = {
   active: "success",
@@ -30,6 +35,10 @@ const statusVariant: Record<string, "success" | "neutral" | "warning" | "danger"
 const PAGE_SIZE = 20;
 
 export function StudentTable() {
+  const user = useCurrentUser();
+  const canEdit = hasPermission(user.role, "students", "edit");
+  const canDelete = hasPermission(user.role, "students", "delete");
+
   const [structure, setStructure] = useState<SchoolStructure | null>(null);
   const [result, setResult] = useState<StudentListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,23 +47,43 @@ export function StudentTable() {
   const [classId, setClassId] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [page, setPage] = useState(1);
+  const [deleting, setDeleting] = useState<StudentRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     schoolStructureService.get().then(setStructure).catch(() => {});
   }, []);
 
+  function load() {
+    setLoading(true);
+    setError(null);
+    studentService
+      .list({ q: search || undefined, classId: classId || undefined, status: status || undefined, page, pageSize: PAGE_SIZE })
+      .then(setResult)
+      .catch(() => setError("Couldn't load students."))
+      .finally(() => setLoading(false));
+  }
+
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setLoading(true);
-      setError(null);
-      studentService
-        .list({ q: search || undefined, classId: classId || undefined, status: status || undefined, page, pageSize: PAGE_SIZE })
-        .then(setResult)
-        .catch(() => setError("Couldn't load students."))
-        .finally(() => setLoading(false));
-    }, 250);
+    const timeout = setTimeout(load, 250);
     return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, classId, status, page]);
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setIsDeleting(true);
+    try {
+      await studentService.remove(deleting.id);
+      toast({ title: "Student deleted", variant: "success" });
+      setDeleting(null);
+      load();
+    } catch (e) {
+      toast({ title: (e as ApiError)?.error ?? "Couldn't delete the student.", variant: "danger" });
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   const totalPages = result ? Math.max(1, Math.ceil(result.total / PAGE_SIZE)) : 1;
 
@@ -116,7 +145,7 @@ export function StudentTable() {
         </div>
       </div>
 
-      {loading && <TableSkeleton rows={8} columns={7} />}
+      {loading && <TableSkeleton rows={8} columns={9} />}
 
       {!loading && error && <ErrorState description={error} onRetry={() => setPage((p) => p)} />}
 
@@ -146,7 +175,8 @@ export function StudentTable() {
                 <TableHead>Section</TableHead>
                 <TableHead>Roll No.</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>ID Card</TableHead>
+                <TableHead>Class Teacher</TableHead>
+                <TableHead>Parent Mobile</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -168,13 +198,31 @@ export function StudentTable() {
                   <TableCell>
                     <Badge variant={statusVariant[student.status] ?? "neutral"}>{student.status}</Badge>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="neutral">Not generated</Badge>
-                  </TableCell>
+                  <TableCell className="text-muted-foreground">{student.classTeacher?.fullName ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{student.parentMobile ?? "—"}</TableCell>
                   <TableCell className="text-right">
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={`/students/${student.id}`}>View</Link>
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/students/${student.id}`}>View</Link>
+                      </Button>
+                      {canEdit && (
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href={`/students/${student.id}?edit=1`}>
+                            <Pencil className="size-4" /> Edit
+                          </Link>
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-danger-600 hover:bg-danger-50 hover:text-danger-600"
+                          onClick={() => setDeleting(student)}
+                        >
+                          <Trash2 className="size-4" /> Delete
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -199,6 +247,17 @@ export function StudentTable() {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        title={`Delete ${deleting?.firstName ?? "this student"}?`}
+        description="This can't be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        isLoading={isDeleting}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

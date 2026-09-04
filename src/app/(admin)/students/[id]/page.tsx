@@ -2,24 +2,27 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronDown, ChevronUp, FileText, ShieldCheck } from "lucide-react";
-import { studentService } from "@/services/studentService";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, ChevronDown, ChevronUp, ClipboardCheck, FileText, Mail, ShieldCheck } from "lucide-react";
+import { studentService, type StudentAttendanceSummary } from "@/services/studentService";
+import { emailHistoryService, type StudentEmailHistoryRecord } from "@/services/emailHistoryService";
 import type { StudentDocumentRecord, StudentGuardianRef, StudentRecord } from "@/types/student";
 import type { StudentInput } from "@/lib/validation/student";
-import {
-  ADMISSION_TYPE_LABELS,
-  PROMOTION_STATUS_LABELS,
-  STUDENT_DOCUMENT_LABELS,
-} from "@/lib/constants/student-documents";
+import { ADMISSION_TYPE_LABELS, PROMOTION_STATUS_LABELS } from "@/lib/constants/student-documents";
+import { ATTENDANCE_STATUSES, ATTENDANCE_STATUS_LABELS } from "@/lib/constants/attendance";
 import { StudentForm } from "@/features/students/student-form";
+import { DocumentGroup } from "@/features/students/document-group";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { LoadingState } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { toast } from "@/hooks/use-toast";
+import { useCan } from "@/hooks/use-can";
 
 interface StudentWithQr extends StudentRecord {
   qrVerification?: { code: string } | null;
@@ -37,9 +40,17 @@ const RELATIONSHIP_LABELS: Record<string, string> = {
 
 export default function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [student, setStudent] = useState<StudentWithQr | null>(null);
   const [error, setError] = useState(false);
-  const [editing, setEditing] = useState(false);
+  // Deep-linkable via ?edit=1 (used by the Edit action on the students list).
+  const [editing, setEditing] = useState(() => searchParams.get("edit") === "1");
+
+  function closeEditing() {
+    setEditing(false);
+    if (searchParams.get("edit") === "1") router.replace(`/students/${id}`);
+  }
 
   // Two levels of progressive disclosure: the overview is what you almost always
   // want, the full record is a click away, and documents are a click past that
@@ -48,6 +59,13 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
   const [showDocuments, setShowDocuments] = useState(false);
   const [documents, setDocuments] = useState<StudentDocumentRecord[] | null>(null);
   const [documentsError, setDocumentsError] = useState(false);
+  const [showEmailHistory, setShowEmailHistory] = useState(false);
+  const [emailHistory, setEmailHistory] = useState<StudentEmailHistoryRecord[] | null>(null);
+  const [emailHistoryError, setEmailHistoryError] = useState(false);
+  const [showAttendance, setShowAttendance] = useState(false);
+  const [attendance, setAttendance] = useState<StudentAttendanceSummary | null>(null);
+  const [attendanceError, setAttendanceError] = useState(false);
+  const can = useCan();
 
   function load() {
     studentService
@@ -76,6 +94,34 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
     if (next && documents === null && !documentsError) loadDocuments();
   }
 
+  function loadEmailHistory() {
+    setEmailHistoryError(false);
+    emailHistoryService
+      .forStudent(id)
+      .then((r) => setEmailHistory(r.data))
+      .catch(() => setEmailHistoryError(true));
+  }
+
+  function toggleEmailHistory() {
+    const next = !showEmailHistory;
+    setShowEmailHistory(next);
+    if (next && emailHistory === null && !emailHistoryError) loadEmailHistory();
+  }
+
+  function loadAttendance() {
+    setAttendanceError(false);
+    studentService
+      .getAttendance(id)
+      .then(setAttendance)
+      .catch(() => setAttendanceError(true));
+  }
+
+  function toggleAttendance() {
+    const next = !showAttendance;
+    setShowAttendance(next);
+    if (next && attendance === null && !attendanceError) loadAttendance();
+  }
+
   if (error) return <ErrorState className="mx-auto max-w-3xl px-6 py-16" onRetry={load} />;
   if (!student) return <LoadingState className="mx-auto max-w-3xl px-6 py-16" />;
 
@@ -87,7 +133,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-8">
         <button
           type="button"
-          onClick={() => setEditing(false)}
+          onClick={closeEditing}
           className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" /> Back to {student.firstName}&apos;s profile
@@ -103,6 +149,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
         </div>
         <StudentForm
           submitLabel="Save changes"
+          studentId={id}
           defaultValues={{
             admissionNumber: student.admissionNumber,
             firstName: student.firstName,
@@ -176,7 +223,7 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
           onSubmit={async (input) => {
             await studentService.update(id, input);
             toast({ title: "Student updated", variant: "success" });
-            setEditing(false);
+            closeEditing();
             load();
           }}
         />
@@ -397,6 +444,154 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
               )}
             </div>
           )}
+
+          {can("studentAttendance", "view") && (
+            <>
+              <div className="flex justify-center">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={toggleAttendance}
+                  aria-expanded={showAttendance}
+                  aria-controls="student-attendance"
+                >
+                  <ClipboardCheck className="size-4" />
+                  {showAttendance ? "Hide attendance" : "Show attendance"}
+                </Button>
+              </div>
+
+              {showAttendance && (
+                <div id="student-attendance">
+                  {attendanceError ? (
+                    <ErrorState onRetry={loadAttendance} />
+                  ) : attendance === null ? (
+                    <LoadingState />
+                  ) : (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Attendance — {attendance.academicYear.label}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex flex-col gap-5">
+                        {attendance.summary.total === 0 ? (
+                          <EmptyState icon={ClipboardCheck} title="No attendance recorded yet" />
+                        ) : (
+                          <>
+                            <div>
+                              <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                                <span className="text-2xl font-semibold text-foreground">{attendance.summary.percentage}%</span>
+                                <span className="text-sm text-muted-foreground">
+                                  Present {attendance.summary.present} · Absent {attendance.summary.absent} · {attendance.summary.total} days marked
+                                </span>
+                              </div>
+                              <Progress
+                                value={attendance.summary.percentage}
+                                tone={attendance.summary.percentage >= 90 ? "success" : attendance.summary.percentage >= 75 ? "warning" : "danger"}
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                              {ATTENDANCE_STATUSES.map((status) => (
+                                <div key={status} className="rounded-md border border-border p-3 text-center">
+                                  <p className="text-lg font-semibold text-foreground">{attendance.summary.byStatus[status] ?? 0}</p>
+                                  <p className="text-xs text-muted-foreground">{ATTENDANCE_STATUS_LABELS[status]}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+
+                        {attendance.bySubject.length > 0 && (
+                          <div>
+                            <p className="mb-2 text-sm font-semibold text-foreground">Subject-wise</p>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Subject</TableHead>
+                                  <TableHead>Present</TableHead>
+                                  <TableHead>Absent</TableHead>
+                                  <TableHead>%</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {attendance.bySubject.map((s) => (
+                                  <TableRow key={s.subjectId}>
+                                    <TableCell className="font-medium">
+                                      {s.subjectName}
+                                      <span className="ml-2 text-xs font-normal text-muted-foreground">{s.subjectCode}</span>
+                                    </TableCell>
+                                    <TableCell>{s.present}</TableCell>
+                                    <TableCell>{s.absent}</TableCell>
+                                    <TableCell>{s.percentage}%</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {can("emailCampaigns", "view") && (
+            <>
+              <div className="flex justify-center">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={toggleEmailHistory}
+                  aria-expanded={showEmailHistory}
+                  aria-controls="student-email-history"
+                >
+                  <Mail className="size-4" />
+                  {showEmailHistory ? "Hide email history" : "Show email history"}
+                </Button>
+              </div>
+
+              {showEmailHistory && (
+                <div id="student-email-history">
+                  {emailHistoryError ? (
+                    <ErrorState onRetry={loadEmailHistory} />
+                  ) : emailHistory === null ? (
+                    <LoadingState />
+                  ) : emailHistory.length === 0 ? (
+                    <EmptyState icon={Mail} title="No emails yet" description="Campaigns that included this student will appear here." />
+                  ) : (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Email history</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Subject</TableHead>
+                              <TableHead>Campaign</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Sent</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {emailHistory.map((h) => (
+                              <TableRow key={h.id}>
+                                <TableCell className="font-medium">{h.subject}</TableCell>
+                                <TableCell className="text-muted-foreground">{h.campaign?.name ?? "—"}</TableCell>
+                                <TableCell><Badge variant={h.status === "SENT" ? "success" : h.status === "FAILED" ? "danger" : "neutral"}>{h.status.replace("_", " ")}</Badge></TableCell>
+                                <TableCell className="text-muted-foreground">{h.sentAt ? new Date(h.sentAt).toLocaleDateString() : "—"}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -438,52 +633,11 @@ function GuardianBlock({ link }: { link: StudentGuardianRef }) {
   );
 }
 
-function DocumentGroup({ title, documents }: { title: string; documents: StudentDocumentRecord[] }) {
-  if (documents.length === 0) return null;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2 text-sm">
-        {documents.map((doc) => (
-          <div key={doc.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border px-3 py-2.5">
-            <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium text-foreground">
-                {doc.title || STUDENT_DOCUMENT_LABELS[doc.documentType] || doc.documentType}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {doc.uploadedFile?.originalName ?? "File"}
-                {doc.version > 1 ? ` · v${doc.version}` : ""}
-                {doc.issuedOn ? ` · issued ${doc.issuedOn.slice(0, 10)}` : ""}
-              </p>
-            </div>
-            <Badge variant={doc.status === "verified" ? "success" : doc.status === "rejected" ? "danger" : "neutral"}>
-              {doc.status}
-            </Badge>
-            {/* Files are never public — this route checks permission before streaming. */}
-            <a
-              href={`/api/files/${doc.uploadedFileId}`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm font-medium text-primary-600 underline-offset-4 hover:underline"
-            >
-              View
-            </a>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-foreground">{value || "—"}</p>
+      <p className="break-words text-foreground">{value || "—"}</p>
     </div>
   );
 }

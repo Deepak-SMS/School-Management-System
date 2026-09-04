@@ -54,7 +54,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const input = cleanEmptyStrings(sectionInputSchema.parse(body));
 
-    const parentClass = await prisma.class.findFirst({ where: { id: input.classId, schoolId } });
+    const parentClass = await prisma.class.findFirst({
+      where: { id: input.classId, schoolId },
+      include: { academicYear: { select: { label: true } } },
+    });
     if (!parentClass) {
       return NextResponse.json({ error: "Validation failed", fieldErrors: { classId: ["Class not found."] } }, { status: 422 });
     }
@@ -65,6 +68,18 @@ export async function POST(request: NextRequest) {
           fieldErrors: { academicYearId: ["Academic year and campus must match the selected class."] },
         },
         { status: 422 },
+      );
+    }
+
+    const duplicate = await prisma.section.findFirst({
+      where: { classId: input.classId, OR: [{ name: input.name }, { code: input.code }] },
+    });
+    if (duplicate) {
+      return NextResponse.json(
+        {
+          error: `Section "${duplicate.name}" (${duplicate.code}) already exists for ${parentClass.name} in ${parentClass.academicYear.label}. Choose a different name/code, or open the existing section instead.`,
+        },
+        { status: 409 },
       );
     }
 
@@ -81,6 +96,12 @@ export async function POST(request: NextRequest) {
           classTeacherId: input.classTeacherId,
           capacity: input.capacity,
           status: input.status,
+        },
+        include: {
+          class: { select: { id: true, name: true } },
+          academicYear: { select: { id: true, label: true } },
+          campus: { select: { id: true, name: true } },
+          classTeacher: { select: { id: true, fullName: true } },
         },
       });
       await recordAudit(tx, { schoolId, action: "section.create", entityType: "Section", entityId: created.id, after: created });
