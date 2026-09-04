@@ -48,6 +48,8 @@ next-env.d.ts
 # local SQLite dev database (migrations in prisma/migrations/ are still tracked)
 /dev.db
 /dev.db-journal
+prisma/dev.db
+prisma/dev.db-journal
 
 # locally stored uploads/generated files (swap for S3 in production — see src/lib/storage.ts)
 /storage
